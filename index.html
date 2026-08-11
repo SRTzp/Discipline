@@ -138,14 +138,23 @@
    ============================================================ */
 
 /* ⬇⬇⬇ วางค่าจาก Firebase Console ตรงนี้ (ขั้นที่ 2 ในคู่มือ) ⬇⬇⬇ */
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configurations
 const firebaseConfig = {
-  apiKey: "วางค่าที่นี่",
-  authDomain: "วางค่าที่นี่",
-  projectId: "วางค่าที่นี่",
-  storageBucket: "วางค่าที่นี่",
-  messagingSenderId: "วางค่าที่นี่",
-  appId: "วางค่าที่นี่"
+  apiKey: "AIzaSyCkWB1di_6G64YFMx2ducpNYypCGs5chUY",
+  authDomain: "discipline-629c3.firebaseapp.com",
+  projectId: "discipline-629c3",
+  storageBucket: "discipline-629c3.firebasestorage.app",
+  messagingSenderId: "920264804175",
+  appId: "1:920264804175:web:b84d3641c3abee6ed4273a"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 /* ⬆⬆⬆ วางค่าจาก Firebase Console ตรงนี้ ⬆⬆⬆ */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
