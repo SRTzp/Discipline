@@ -216,7 +216,8 @@ const DAY_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 const KID_COLORS = ['#4a6491','#7d9bc1','#bd6b57','#c9973f','#4f8172','#8b7fa8'];
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
-const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20, parentPin:'1234'};
+const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
+                      autoHome:true, autoHomeSec:5, parentPin:'1234'};
 const mkChore = c => Object.assign(
   {id:uid(), once:true, from:'', due:'', grace:10, latePct:50, routine:true, by:'kid', days:ALLDAYS.slice()}, c);
 const DEF_CHORES = [
@@ -264,6 +265,7 @@ let base = null;              // families/{uid}
 let modal = null;
 let view = {screen:'pick', kidId:null, tab:'chores', pinFor:null, pinBuf:''};
 let unsubs = [];
+let flash = null, flashTimer = null;   // หน้าสรุปหลังกดเสร็จ ก่อนเด้งกลับหน้าแรก
 
 const col = n => collection(db, 'families', base, n);
 const dref = (n,id) => doc(db, 'families', base, n, id);
@@ -420,9 +422,46 @@ function fail(e){ console.error(e); toast('บันทึกไม่สำเ�
 /* ============================================================
    RENDER
    ============================================================ */
+/* ---------- หน้าสรุปหลังกดเสร็จ แล้วเด้งกลับหน้าแรกให้คนถัดไป ---------- */
+function showFlash(o){
+  if(!cfg().autoHome){ if(o.toast) toast(o.toast); return; }
+  clearTimeout(flashTimer);
+  flash = Object.assign({left: Number(cfg().autoHomeSec || 5)}, o);
+  render();
+  tickFlash();
+}
+function tickFlash(){
+  flashTimer = setTimeout(() => {
+    if(!flash) return;
+    flash.left--;
+    if(flash.left <= 0){ flash = null; go('pick'); }
+    else { render(); tickFlash(); }
+  }, 1000);
+}
+function stayHere(){ clearTimeout(flashTimer); flash = null; render(); }
+function goHomeNow(){ clearTimeout(flashTimer); flash = null; go('pick'); }
+function viewFlash(){
+  const k = kidById(view.kidId) || {name:'', color:'#4a6491'};
+  return `
+    <div style="text-align:center;padding:34px 8px 10px">
+      <div style="font-size:66px;line-height:1">${flash.emo}</div>
+      <h1 style="margin-top:10px">${esc(flash.title)}</h1>
+      <div class="points-big" style="color:${flash.color||'var(--good)'};margin:10px 0">${esc(flash.big)}</div>
+      <div class="muted" style="font-size:15px">${esc(flash.sub)}</div>
+      ${flash.extra ? `<div class="card" style="margin-top:18px;background:var(--gold-soft)">${esc(flash.extra)}</div>` : ''}
+      <div class="row" style="margin-top:30px">
+        <button style="flex:1" onclick="stayHere()">ทำต่ออีก</button>
+        <button class="btn-primary" style="flex:1" onclick="goHomeNow()">เสร็จแล้ว</button>
+      </div>
+      <div class="muted" style="margin-top:16px">กลับหน้าแรกอัตโนมัติใน ${flash.left} วินาที…</div>
+      <div class="muted" style="margin-top:4px;font-size:12px">เพื่อให้คนต่อไปกดของตัวเองได้เลย</div>
+    </div>`;
+}
+
 function render(){
   if(!S) return;
   const app = document.getElementById('app');
+  if(flash){ app.innerHTML = viewFlash(); renderModal(); return; }
   if(view.screen === 'pick')        app.innerHTML = viewPick();
   else if(view.screen === 'pin')    app.innerHTML = viewPin();
   else if(view.screen === 'kid')    app.innerHTML = viewKid();
@@ -484,7 +523,10 @@ function pinCheck(){
   }else toast('รหัสไม่ถูกต้อง');
   view.pinBuf=''; render();
 }
-function go(screen, tab){ view.screen=screen; if(tab) view.tab=tab; view.pinBuf=''; render(); }
+function go(screen, tab){
+  clearTimeout(flashTimer); flash = null;
+  view.screen=screen; if(tab) view.tab=tab; view.pinBuf=''; render();
+}
 function setTab(t){ view.tab=t; render(); }
 
 /* ---------- หน้าเด็ก ---------- */
@@ -646,16 +688,31 @@ async function doChore(id){
   const t = evalTiming(c);
   const commit = async () => {
     try{
+      const statusTxt = t.status==='ontime' ? 'ทันเวลา! 🎉'
+                      : t.status==='late'   ? `สาย ${t.lateMin} นาที`
+                      : t.status==='toolate'? `สาย ${t.lateMin} นาที — รอบหน้าเอาใหม่นะ` : 'เรียบร้อย';
       if(cfg().approveChores){
         const p = {id:uid(), ts:now(), kidId:view.kidId, type:'chore', name:c.name, emo:c.emo,
                    pts:t.pts, full:Number(c.pts), due:c.due||'', status:t.status, lateMin:t.lateMin};
         await setDoc(dref('pending', p.id), p);
-        toast(t.status==='ontime' ? `ส่งงานตรงเวลา! รอตรวจ ${c.emo}` : `ส่งแล้ว รอตรวจ ${c.emo}`);
+        const pr = routineProgress(view.kidId);
+        showFlash({emo:c.emo, title:c.name, big:'ส่งแล้ว ✓', color:'var(--navy)',
+          sub:`${statusTxt} · รอคุณพ่อคุณแม่ตรวจ`,
+          extra: pr.complete ? '🎉 วันนี้ทำครบแล้ว! เลือกรางวัลได้เลย' : `วันนี้ทำแล้ว ${pr.done}/${pr.total}`,
+          toast:`ส่งแล้ว รอตรวจ ${c.emo}`});
       }else{
         await addLog(logEntry(view.kidId, 'chore', c.name, c.emo, t.pts,
                               {due:c.due||'', status:t.status, lateMin:t.lateMin}));
-        toast(t.pts>0 ? `ได้ ${t.pts} แต้ม ${c.emo}` : 'บันทึกเวลาแล้ว แต่สายเกินไปเลยไม่ได้แต้ม');
-        await checkPerfectDay(view.kidId);
+        const gotBonus = await checkPerfectDay(view.kidId);
+        const pr = routineProgress(view.kidId);
+        showFlash({emo:c.emo, title:c.name,
+          big: t.pts>0 ? `+${t.pts} แต้ม` : 'ไม่ได้แต้ม',
+          color: t.pts>0 ? 'var(--good)' : 'var(--warn)',
+          sub: statusTxt,
+          extra: gotBonus ? `🏅 ตรงเวลาครบทั้งวัน! โบนัสอีก +${cfg().perfectBonus} แต้ม`
+               : pr.complete ? '🎉 วันนี้ทำครบแล้ว! เลือกรางวัลได้เลย'
+               : `วันนี้ทำแล้ว ${pr.done}/${pr.total}`,
+          toast: t.pts>0 ? `ได้ ${t.pts} แต้ม ${c.emo}` : 'บันทึกเวลาแล้ว แต่สายเกินไปเลยไม่ได้แต้ม'});
       }
     }catch(e){ fail(e); }
   };
@@ -674,7 +731,8 @@ function claimDaily(id){
     try{
       const p = {id:uid(), ts:now(), kidId:k.id, type:'daily', name:r.name, emo:r.emo, pts:0};
       await setDoc(dref('pending', p.id), p);
-      toast('เลือกแล้ว! รอคุณพ่อคุณแม่อนุมัติ 🎉');
+      showFlash({emo:r.emo, title:'เลือกรางวัลวันนี้แล้ว!', big:r.name, color:'var(--gold)',
+        sub:'รอคุณพ่อคุณแม่อนุมัติ 🎉', toast:'เลือกแล้ว! รอคุณพ่อคุณแม่อนุมัติ 🎉'});
     }catch(e){ fail(e); }
   });
 }
@@ -686,7 +744,8 @@ function redeem(id){
     try{
       const p = {id:uid(), ts:now(), kidId:kid.id, type:'reward', name:r.name, emo:r.emo, pts:Number(r.cost)};
       await setDoc(dref('pending', p.id), p);
-      toast('ส่งคำขอแล้ว รออนุมัติ');
+      showFlash({emo:r.emo, title:'ส่งคำขอแลกแล้ว', big:`−${r.cost} แต้ม`, color:'var(--gold)',
+        sub:'รอคุณพ่อคุณแม่อนุมัติก่อนนะ', toast:'ส่งคำขอแล้ว รออนุมัติ'});
     }catch(e){ fail(e); }
   }));
 }
@@ -921,6 +980,16 @@ function parentManage(){
       <div class="switch">
         <button class="${c.stepOrder?'on':''}" onclick="setOpt('stepOrder',true)">ต้องทำเรียงตามลำดับ</button>
         <button class="${c.stepOrder?'':'on'}" onclick="setOpt('stepOrder',false)">กดข้อไหนก่อนก็ได้</button></div>
+      <div class="sec-title" style="margin:16px 0 8px">หลังกดงานเสร็จ</div>
+      <div class="switch">
+        <button class="${c.autoHome?'on':''}" onclick="setOpt('autoHome',true)">เด้งกลับหน้าแรก</button>
+        <button class="${c.autoHome?'':'on'}" onclick="setOpt('autoHome',false)">อยู่หน้าเดิม</button></div>
+      <div class="muted" style="margin-top:8px">${c.autoHome
+        ? `โชว์สรุปว่าได้กี่แต้ม แล้วกลับหน้าแรกใน ${c.autoHomeSec||5} วินาที — คนต่อไปจะได้ไม่กดในชื่อคนอื่น (กด "ทำต่ออีก" ถ้าจะทำหลายข้อรวด)`
+        : 'อยู่ในหน้าของเด็กคนเดิมต่อ เหมาะกับเครื่องส่วนตัวที่ไม่ได้ใช้ร่วมกัน'}</div>
+      ${c.autoHome ? `<div class="row-between" style="margin-top:10px">
+        <span class="muted">รอกี่วินาทีก่อนเด้งกลับ</span>
+        <button class="btn-sm" onclick="editAutoSec()">${c.autoHomeSec||5} วินาที</button></div>` : ''}
       <div class="row-between" style="margin-top:16px">
         <span>โบนัสตรงเวลาครบทั้งวัน</span>
         <button class="btn-sm" onclick="editBonus()">${c.perfectBonus ? '+'+c.perfectBonus+' แต้ม' : 'ปิดอยู่'}</button></div>
@@ -958,6 +1027,15 @@ function parentManage(){
 }
 async function setOpt(key, v){
   try{ await updateDoc(settingsRef(), {[key]: v}); }catch(e){ fail(e); }
+}
+function editAutoSec(){
+  openForm({title:'รอกี่วินาทีก่อนเด้งกลับหน้าแรก',
+    fields:[{key:'s', label:'วินาที (3–15)', type:'number', value:cfg().autoHomeSec||5}],
+    async onSave(v){
+      const n = parseInt(v.s,10);
+      if(isNaN(n) || n<3 || n>15) return 'ใส่ได้ 3 ถึง 15 วินาที';
+      await setOpt('autoHomeSec', n);
+    }});
 }
 function editBonus(){
   openForm({title:'โบนัสตรงเวลาครบทั้งวัน',
@@ -1308,7 +1386,7 @@ window.addEventListener('offline', netBar);
 netBar();
 
 /* ---------- นาฬิกาเดิน ---------- */
-setInterval(() => { if(S && !modal) render(); }, 20000);
+setInterval(() => { if(S && !modal && !flash) render(); }, 20000);
 
 /* ---------- เริ่ม ---------- */
 onAuthStateChanged(auth, async user => {
@@ -1326,7 +1404,8 @@ onAuthStateChanged(auth, async user => {
 Object.assign(window, {
   askPin, pinTap, pinDel, go, setTab, doChore, claimDaily, redeem,
   approve, reject, markParent, giveChore, applyPenalty, openAdjust, undoLog,
-  editKid, editItem, delItem, setOpt, editBonus, changeParentPin, doSignOut,
+  editKid, editItem, delItem, setOpt, editBonus, editAutoSec, changeParentPin, doSignOut,
+  stayHere, goHomeNow,
   openForm, openConfirm, confirmYes, closeModal, setVal, toggleDay, setDays,
   submitForm, pickPhoto, clearPhoto, pinAskTap, pinAskDel, doSignIn
 });
