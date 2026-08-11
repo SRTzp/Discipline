@@ -130,20 +130,59 @@
 <div id="modal"></div>
 <div class="toast" id="toast"></div>
 
+<script>
+/* ตัวจับข้อผิดพลาดตอนเริ่มระบบ — ถ้าค้างหรือพัง จะบอกบนหน้าจอเลย ไม่ต้องเปิด F12 */
+(function(){
+  var shown = false;
+  function hint(m){
+    m = String(m||'');
+    if(/firebase\/app|Failed to resolve|bare specifier/i.test(m))
+      return 'วาง config ผิด — มีบรรทัด import ของ Firebase Console ติดมาด้วย ให้เอาแค่ก้อน firebaseConfig = {...}';
+    if(/already been declared/i.test(m))
+      return 'มีโค้ดซ้ำกัน 2 ชุด (initializeApp หรือ app) — ให้ใช้ไฟล์ต้นฉบับแล้วแก้แค่ 6 บรรทัดใน firebaseConfig';
+    if(/Failed to fetch|dynamically imported|NetworkError|Load failed/i.test(m))
+      return 'โหลดไฟล์ Firebase จาก gstatic.com ไม่ได้ — ลองปิดตัวบล็อกโฆษณา / ปิด VPN / สลับไปใช้เน็ตมือถือ';
+    if(/api-key|invalid|400/i.test(m))
+      return 'ค่า apiKey หรือ authDomain ไม่ถูกต้อง ลองคัดลอกจาก Firebase Console ใหม่';
+    if(/permission|insufficient/i.test(m))
+      return 'ยังไม่ได้วาง Rules ใน Firestore (ขั้นที่ 4 ในคู่มือ)';
+    return 'ลองรีเฟรชแบบล้างแคช (Ctrl+Shift+R) ถ้ายังไม่หาย ส่งข้อความนี้มาให้ดูได้เลย';
+  }
+  window.__showDiag = function(msg){
+    if(shown) return; shown = true;
+    document.getElementById('app').innerHTML =
+      '<div class="boot" style="text-align:left">' +
+      '<div class="big" style="text-align:center">⚠️</div>' +
+      '<b style="display:block;text-align:center;color:var(--ink);margin-bottom:14px">เปิดแอปไม่สำเร็จ</b>' +
+      '<div class="card" style="font-size:13px;word-break:break-word"><b>สาเหตุที่น่าจะเป็น</b><br>' +
+      hint(msg) + '</div>' +
+      '<div class="card" style="font-size:12px;color:var(--muted);word-break:break-word"><b>ข้อความจากระบบ</b><br>' +
+      String(msg).replace(/[<>]/g,'') + '</div>' +
+      '<div style="text-align:center"><button class="btn-primary" onclick="location.reload()">ลองใหม่</button></div></div>';
+  };
+  window.addEventListener('error', function(e){
+    if(e && e.target && e.target.tagName === 'SCRIPT')
+      window.__showDiag('โหลดสคริปต์ไม่ได้: ' + (e.target.src || 'module'));
+    else window.__showDiag((e.message||'error') + (e.filename ? ' @ บรรทัด ' + e.lineno : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e.reason;
+    window.__showDiag((r && (r.code || r.message)) || String(r));
+  });
+  setTimeout(function(){
+    if(!window.__booted) window.__showDiag('รอเกิน 12 วินาทีแล้วยังเชื่อมต่อไม่ได้');
+  }, 12000);
+})();
+</script>
+
 <script type="module">
 /* ============================================================
    แต้มวินัย — เวอร์ชัน Firebase Firestore
    วางบน GitHub Pages ได้เลย · ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์
-   ใช้งานตอนเน็ตหลุดได้ แล้วซิงก์ให้เองเมื่อกลับมาออนไลน์
+   ใช้งานตอนเน็ตหลุดได้ แล้วซิงก์ให้เองเมื่อsกลับมาออนไลน์
    ============================================================ */
 
-/* ⬇⬇⬇ วางค่าจาก Firebase Console ตรงนี้ (ขั้นที่ 2 ในคู่มือ) ⬇⬇⬇ */
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configurations
+/* ⬇⬇⬇ ค่าจาก Firebase Console ของโปรเจกต์ discipline-629c3 (ใส่ให้แล้ว) ⬇⬇⬇ */
 const firebaseConfig = {
   apiKey: "AIzaSyCkWB1di_6G64YFMx2ducpNYypCGs5chUY",
   authDomain: "discipline-629c3.firebaseapp.com",
@@ -152,10 +191,7 @@ const firebaseConfig = {
   messagingSenderId: "920264804175",
   appId: "1:920264804175:web:b84d3641c3abee6ed4273a"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-/* ⬆⬆⬆ วางค่าจาก Firebase Console ตรงนี้ ⬆⬆⬆ */
+/* ⬆⬆⬆ ถ้าจะเปลี่ยนโปรเจกต์ ให้แก้แค่ 6 บรรทัดข้างบนนี้ ห้ามเติม import หรือ initializeApp ⬆⬆⬆ */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
@@ -1276,6 +1312,7 @@ setInterval(() => { if(S && !modal) render(); }, 20000);
 
 /* ---------- เริ่ม ---------- */
 onAuthStateChanged(auth, async user => {
+  window.__booted = true;               // บอกตัวจับข้อผิดพลาดว่าเริ่มระบบสำเร็จแล้ว
   unsubs.forEach(u => { try{ u(); }catch(e){} });
   unsubs = []; ready = {}; S = null;
   if(!user){ viewLogin(); return; }
