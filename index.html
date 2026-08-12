@@ -133,6 +133,11 @@
   .kidbar button{background:rgba(255,255,255,.22);color:#fff;padding:9px 13px;font-size:14px}
   .kid-tile{border:3px solid transparent}
   .kid-tile .av{margin:0 auto}
+  .colorpick{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
+  .colorpick button{width:40px;height:40px;border-radius:50%;padding:0;
+    box-shadow:0 2px 6px rgba(31,44,71,.22)}
+  .colorpick button.on{outline:3px solid var(--ink);outline-offset:3px}
+  input[type=color]{width:60px;height:42px;padding:3px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -224,7 +229,8 @@ const db   = initializeFirestore(app, {
    ============================================================ */
 const ALLDAYS = [0,1,2,3,4,5,6], WEEKDAYS = [1,2,3,4,5], SCHOOLNIGHT = [0,1,2,3,4];
 const DAY_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
-const KID_COLORS = ['#4a6491','#7d9bc1','#bd6b57','#c9973f','#4f8172','#8b7fa8'];
+const KID_COLORS = ['#4a6491','#7d9bc1','#bd6b57','#c9973f','#4f8172','#8b7fa8',
+                    '#3e8e9c','#c07b8f','#7d8b52','#6b5b95','#d08a4e','#5a7d9a'];
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
@@ -1152,6 +1158,27 @@ function renderModal(){
         ${modal.values.photo ? '' : `<div class="emoji-pick">${emos.map(e =>
           `<button class="${modal.values.emo===e?'on':''}" onclick="setVal('emo','${e}')">${e}</button>`).join('')}</div>`}`;
     }
+    if(fd.type === 'color'){
+      const cur = String(v || '#4a6491').toLowerCase();
+      const clash = S.kids.find(x => x.id !== modal.values.__editingId
+                                  && String(x.color||'').toLowerCase() === cur);
+      const prev = {photo:modal.values.photo, emo:modal.values.emo||'🙂', color:cur};
+      return `<label>${fd.label}</label>
+        <div class="colorpick">${KID_COLORS.map(c =>
+          `<button class="${cur===c?'on':''}" style="background:${c}" onclick="setVal('${fd.key}','${c}')"></button>`).join('')}</div>
+        <div class="row" style="margin-top:10px;align-items:center">
+          <span class="muted" style="flex:1">หรือเลือกสีเองแบบละเอียด</span>
+          <input type="color" data-key="${fd.key}" value="${esc(cur)}"></div>
+        ${clash ? `<div style="color:var(--warn);font-size:13px;margin-top:8px">
+          ⚠️ สีนี้ซ้ำกับ ${esc(clash.name)} — เด็กอาจสับสนว่าเป็นหน้าจอของใคร</div>` : ''}
+        <div style="margin-top:10px;border-radius:14px;overflow:hidden">
+          <div style="background:${cur};color:#fff;padding:11px 13px;display:flex;align-items:center;gap:11px">
+            ${avatar(prev, 46)}
+            <div><div style="font-size:18px;font-weight:800">${esc(modal.values.name || 'ชื่อลูก')}</div>
+              <div style="font-size:12px;opacity:.9">ตัวอย่างแถบบนหน้าจอ</div></div></div>
+          <div style="background:${tint(cur,0.30)};padding:14px;text-align:center;color:var(--muted);font-size:12px">
+            สีพื้นหลังทั้งหน้าจอจะเป็นแบบนี้</div></div>`;
+    }
     if(fd.type === 'emoji'){
       const emos = ['✨','⏰','🚿','👕','🍳','🎒','🚗','🏫','🛏️','✏️','♟️','📚','🧹','🍽️','🧸','🪴','🛁','🎮','🕹️','📺','🍦','🍜','🍿','💰','🌙','🎡','🎁','⚠️','😤','⚡','📕','🧺','📢'];
       return `<label>${fd.label}</label><div class="emoji-pick">${emos.map(e =>
@@ -1265,17 +1292,19 @@ function editKid(id){
   openForm({title: k ? 'แก้ไข ' + k.name : 'เพิ่มเด็ก',
     fields:[{key:'name', label:'ชื่อ', type:'text', value:k?k.name:''},
             {key:'avatar', label:'รูปโปรไฟล์', type:'avatar'},
+            {key:'color', label:'สีประจำตัว (ใช้ย้อมทั้งหน้าจอ)', type:'color',
+             value:k?(k.color||KID_COLORS[0]):KID_COLORS[S.kids.length % KID_COLORS.length]},
             {key:'pin', label:'PIN 4 หลัก (ใช้ตอนแลกของรางวัล)', type:'pin', value:k?k.pin:''}],
-    extraValues:{photo:k?k.photo:'', emo:k?k.emo:'🦊'},
+    extraValues:{photo:k?k.photo:'', emo:k?k.emo:'🦊', __editingId:k?k.id:''},
     async onSave(v){
       if(!v.name || !v.name.trim()) return 'ใส่ชื่อด้วยนะ';
       const pin = String(v.pin||'').replace(/\D/g,'').slice(0,4);
       if(pin.length !== 4) return 'PIN ต้องเป็นตัวเลข 4 หลัก';
+      const color = /^#[0-9a-fA-F]{6}$/.test(String(v.color||'')) ? String(v.color).toLowerCase() : KID_COLORS[0];
       try{
-        if(k) await updateDoc(dref('kids', k.id), {name:v.name.trim(), emo:v.emo, photo:v.photo||'', pin});
+        if(k) await updateDoc(dref('kids', k.id), {name:v.name.trim(), emo:v.emo, photo:v.photo||'', pin, color});
         else{
-          const nk = {id:uid(), name:v.name.trim(), emo:v.emo||'🦊', photo:v.photo||'', pin,
-                      color:KID_COLORS[S.kids.length % KID_COLORS.length], points:0};
+          const nk = {id:uid(), name:v.name.trim(), emo:v.emo||'🦊', photo:v.photo||'', pin, color, points:0};
           await setDoc(dref('kids', nk.id), nk);
         }
       }catch(e){ fail(e); }
