@@ -122,6 +122,17 @@
   .boot{text-align:center;padding:60px 20px;color:var(--muted)}
   .boot .big{font-size:38px;margin-bottom:10px}
   .login{max-width:360px;margin:50px auto;text-align:center}
+
+  /* แถบบอกว่านี่คือบัญชีของใคร — ติดบนสุดตลอด ไม่เลื่อนหาย */
+  .kidbar{position:sticky;top:0;z-index:40;margin:-14px -14px 14px;padding:12px 14px;
+    display:flex;align-items:center;gap:12px;color:#fff;
+    box-shadow:0 4px 18px rgba(31,44,71,.22)}
+  .kidbar .av{border:3px solid rgba(255,255,255,.9);background:rgba(255,255,255,.25)}
+  .kidbar .nm{font-size:20px;font-weight:800;line-height:1.15}
+  .kidbar .pt{font-size:13px;opacity:.92;font-weight:600}
+  .kidbar button{background:rgba(255,255,255,.22);color:#fff;padding:9px 13px;font-size:14px}
+  .kid-tile{border:3px solid transparent}
+  .kid-tile .av{margin:0 auto}
 </style>
 </head>
 <body>
@@ -217,7 +228,7 @@ const KID_COLORS = ['#4a6491','#7d9bc1','#bd6b57','#c9973f','#4f8172','#8b7fa8']
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
-                      autoHome:true, autoHomeSec:5, parentPin:'1234'};
+                      autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60, parentPin:'1234'};
 const mkChore = c => Object.assign(
   {id:uid(), once:true, from:'', due:'', grace:10, latePct:50, routine:true, by:'kid', days:ALLDAYS.slice()}, c);
 const DEF_CHORES = [
@@ -302,6 +313,14 @@ function timeAgo(ts){
   if(d < 3600) return Math.floor(d/60)+' นาทีที่แล้ว';
   if(dstr(ts) === todayStr()) return 'วันนี้ ' + fmtClock(ts);
   return new Date(ts).toLocaleDateString('th-TH',{day:'numeric',month:'short'}) + ' ' + fmtClock(ts);
+}
+/* ผสมสีประจำตัวกับสีพื้นหลัง เพื่อย้อมทั้งหน้าจอแบบอ่อน ๆ */
+function tint(hex, amt){
+  const h = String(hex || '#4a6491').replace('#','');
+  const bg = [246,242,236];
+  const c = [0,2,4].map(i => parseInt(h.slice(i,i+2),16));
+  const m = c.map((v,i) => Math.round(bg[i] + (v - bg[i]) * amt));
+  return `rgb(${m[0]},${m[1]},${m[2]})`;
 }
 function avatar(k, size){
   const s = size || 52;
@@ -441,9 +460,14 @@ function tickFlash(){
 function stayHere(){ clearTimeout(flashTimer); flash = null; render(); }
 function goHomeNow(){ clearTimeout(flashTimer); flash = null; go('pick'); }
 function viewFlash(){
-  const k = kidById(view.kidId) || {name:'', color:'#4a6491'};
+  const k = kidById(view.kidId) || {name:'', color:'#4a6491', emo:'🙂', photo:''};
   return `
-    <div style="text-align:center;padding:34px 8px 10px">
+    <div class="kidbar" style="background:${k.color}">
+      ${avatar(k, 54)}
+      <div style="flex:1;min-width:0"><div class="nm">${esc(k.name)}</div>
+        <div class="pt">${available(k.id)} แต้ม</div></div>
+    </div>
+    <div style="text-align:center;padding:20px 8px 10px">
       <div style="font-size:66px;line-height:1">${flash.emo}</div>
       <h1 style="margin-top:10px">${esc(flash.title)}</h1>
       <div class="points-big" style="color:${flash.color||'var(--good)'};margin:10px 0">${esc(flash.big)}</div>
@@ -461,6 +485,10 @@ function viewFlash(){
 function render(){
   if(!S) return;
   const app = document.getElementById('app');
+  // ย้อมทั้งหน้าจอด้วยสีประจำตัว เพื่อให้รู้ทันทีว่ากำลังอยู่ในบัญชีของใคร
+  const inKid = (view.screen === 'kid' || (view.screen === 'pin' && view.pinFor !== 'parent')) || flash;
+  const who = inKid ? kidById(view.kidId || view.pinFor) : null;
+  document.body.style.background = who ? tint(who.color, 0.30) : '';
   if(flash){ app.innerHTML = viewFlash(); renderModal(); return; }
   if(view.screen === 'pick')        app.innerHTML = viewPick();
   else if(view.screen === 'pin')    app.innerHTML = viewPin();
@@ -471,9 +499,10 @@ function render(){
 function viewPick(){
   const tiles = S.kids.map(k => {
     const pr = routineProgress(k.id);
-    return `<div class="kid-tile" onclick="askPin('${k.id}')">
-      <div style="display:flex;justify-content:center">${avatar(k, 72)}</div>
-      <div class="nm">${esc(k.name)}</div>
+    return `<div class="kid-tile" style="border-color:${k.color};background:${tint(k.color,0.12)}"
+                 onclick="askPin('${k.id}')">
+      <div style="display:flex;justify-content:center">${avatar(k, 92)}</div>
+      <div class="nm" style="color:${k.color}">${esc(k.name)}</div>
       <div class="pt">${available(k.id)} แต้ม${pr.total?` · วันนี้ ${pr.done}/${pr.total}`:''}</div>
     </div>`;
   }).join('');
@@ -648,12 +677,18 @@ function viewKid(){
   }
   const streak = onTimeStreak(k.id), res = reserved(k.id);
   return `
-    <div class="topbar"><button class="btn-ghost" onclick="go('pick')">← ออก</button>
-      <div style="flex:1"></div><span class="badge clock">🕐 ${fmtClock(now())}</span></div>
-    <div class="card" style="background:linear-gradient(135deg,${k.color}1f,var(--card))">
+    <div class="kidbar" style="background:${k.color}">
+      ${avatar(k, 54)}
+      <div style="flex:1;min-width:0">
+        <div class="nm">${esc(k.name)}</div>
+        <div class="pt">${avail} แต้ม · 🕐 ${fmtClock(now())}</div>
+      </div>
+      <button onclick="go('pick')">ออก ✕</button>
+    </div>
+    <div class="card" style="background:linear-gradient(135deg,${k.color}22,var(--card));border:2px solid ${k.color}55">
       <div class="row">${avatar(k, 58)}
         <div style="flex:1"><div class="muted">แต้มของ ${esc(k.name)}</div>
-          <div class="points-big">${avail}</div>
+          <div class="points-big" style="color:${k.color}">${avail}</div>
           ${res ? `<div class="muted">จองไว้แลกของรางวัล ${res} แต้ม</div>` : ''}</div>
         ${streak > 0 ? `<div style="text-align:center"><div style="font-size:26px">🔥</div>
           <div style="font-weight:800;color:var(--gold);font-size:18px">${streak}</div>
@@ -990,6 +1025,16 @@ function parentManage(){
       ${c.autoHome ? `<div class="row-between" style="margin-top:10px">
         <span class="muted">รอกี่วินาทีก่อนเด้งกลับ</span>
         <button class="btn-sm" onclick="editAutoSec()">${c.autoHomeSec||5} วินาที</button></div>` : ''}
+      <div class="sec-title" style="margin:16px 0 8px">ถ้าไม่มีใครแตะหน้าจอ</div>
+      <div class="switch">
+        <button class="${c.idleHome?'on':''}" onclick="setOpt('idleHome',true)">กลับหน้าแรกเอง</button>
+        <button class="${c.idleHome?'':'on'}" onclick="setOpt('idleHome',false)">ค้างไว้อย่างนั้น</button></div>
+      ${c.idleHome ? `<div class="row-between" style="margin-top:10px">
+        <span class="muted">ทิ้งไว้กี่วินาทีถึงกลับ</span>
+        <button class="btn-sm" onclick="editIdleSec()">${c.idleSec||60} วินาที</button></div>` : ''}
+      <div class="muted" style="margin-top:8px">${c.idleHome
+        ? 'กันเครื่องค้างอยู่ในบัญชีของคนก่อนหน้า (โหมดผู้ปกครองให้เวลานานกว่า 3 เท่า)'
+        : 'เครื่องจะค้างอยู่หน้าเดิมจนกว่าจะมีคนกดออก'}</div>
       <div class="row-between" style="margin-top:16px">
         <span>โบนัสตรงเวลาครบทั้งวัน</span>
         <button class="btn-sm" onclick="editBonus()">${c.perfectBonus ? '+'+c.perfectBonus+' แต้ม' : 'ปิดอยู่'}</button></div>
@@ -1035,6 +1080,15 @@ function editAutoSec(){
       const n = parseInt(v.s,10);
       if(isNaN(n) || n<3 || n>15) return 'ใส่ได้ 3 ถึง 15 วินาที';
       await setOpt('autoHomeSec', n);
+    }});
+}
+function editIdleSec(){
+  openForm({title:'ทิ้งไว้กี่วินาทีถึงกลับหน้าแรก',
+    fields:[{key:'s', label:'วินาที (20–300)', type:'number', value:cfg().idleSec||60}],
+    async onSave(v){
+      const n = parseInt(v.s,10);
+      if(isNaN(n) || n<20 || n>300) return 'ใส่ได้ 20 ถึง 300 วินาที';
+      await setOpt('idleSec', n);
     }});
 }
 function editBonus(){
@@ -1388,6 +1442,20 @@ netBar();
 /* ---------- นาฬิกาเดิน ---------- */
 setInterval(() => { if(S && !modal && !flash) render(); }, 20000);
 
+/* ---------- ไม่มีใครแตะนาน ๆ → กลับหน้าแรกเอง ----------
+   กันเครื่องค้างอยู่ในบัญชีของคนก่อนหน้า คนถัดไปเดินมาจะเจอหน้าแรกเสมอ */
+let lastTouch = Date.now();
+['pointerdown','touchstart','keydown','wheel'].forEach(ev =>
+  document.addEventListener(ev, () => { lastTouch = Date.now(); }, {capture:true, passive:true}));
+setInterval(() => {
+  if(!S || modal || flash) return;
+  if(view.screen === 'pick') return;
+  if(!cfg().idleHome) return;
+  const sec = Number(cfg().idleSec || 60);
+  const limit = view.screen === 'parent' ? sec * 3 : sec;   // โหมดผู้ปกครองให้เวลานานกว่า จะได้อ่านสรุปทัน
+  if(Date.now() - lastTouch > limit * 1000) go('pick');
+}, 5000);
+
 /* ---------- เริ่ม ---------- */
 onAuthStateChanged(auth, async user => {
   window.__booted = true;               // บอกตัวจับข้อผิดพลาดว่าเริ่มระบบสำเร็จแล้ว
@@ -1404,7 +1472,7 @@ onAuthStateChanged(auth, async user => {
 Object.assign(window, {
   askPin, pinTap, pinDel, go, setTab, doChore, claimDaily, redeem,
   approve, reject, markParent, giveChore, applyPenalty, openAdjust, undoLog,
-  editKid, editItem, delItem, setOpt, editBonus, editAutoSec, changeParentPin, doSignOut,
+  editKid, editItem, delItem, setOpt, editBonus, editAutoSec, editIdleSec, changeParentPin, doSignOut,
   stayHere, goHomeNow,
   openForm, openConfirm, confirmYes, closeModal, setVal, toggleDay, setDays,
   submitForm, pickPhoto, clearPhoto, pinAskTap, pinAskDel, doSignIn
