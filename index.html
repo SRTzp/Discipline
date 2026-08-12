@@ -235,31 +235,34 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
                       autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60,
-                      rewardsV3:true, parentPin:'1234'};
+                      rewardsV4:true, parentPin:'1234'};
 const mkChore = c => Object.assign(
   {id:uid(), once:true, from:'', due:'', grace:10, latePct:50, routine:true, by:'kid',
    extra:false, all:false, days:ALLDAYS.slice()}, c);
-/* กิจวัตรหลัก รวมกันต้องได้ 100 แต้มพอดี = คะแนนเต็มของวัน (ใช้ซื้อรางวัลเล็ก) */
+/* กิจวัตรหลัก รวมกันต้องได้ 100 แต้มพอดี = คะแนนเต็มของวัน (ใช้ซื้อรางวัลเล็ก)
+   เรียงแต้มตามลำดับความสำคัญ แต่ไม่ให้ห่างกันมาก (20 → 10) */
 const DEF_CHORES = [
-  mkChore({name:'ตื่นนอน ลุกจากเตียง',  emo:'⏰', pts:15, from:'05:00', due:'06:40', days:WEEKDAYS}),
-  mkChore({name:'อาบน้ำเสร็จ',          emo:'🚿', pts:15, from:'06:00', due:'07:00', days:WEEKDAYS}),
-  mkChore({name:'กินข้าวเช้าเสร็จ',      emo:'🍳', pts:10, from:'06:30', due:'07:25', days:WEEKDAYS}),
-  mkChore({name:'ถึงโรงเรียนตรงเวลา',    emo:'🏫', pts:25, due:'08:00', days:WEEKDAYS, by:'parent'}),
-  mkChore({name:'ทำการบ้านเสร็จ',        emo:'✏️', pts:15, from:'16:00', due:'19:00', days:WEEKDAYS}),
-  mkChore({name:'เก็บกระเป๋าพร้อมพรุ่งนี้', emo:'🎒', pts:10, from:'18:00', due:'20:45', days:WEEKDAYS}),
-  mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:10, from:'18:00', due:'20:50', days:WEEKDAYS}),
-  /* ---- งานเสริม → เข้ากระเป๋า "แต้มพิเศษ" สำหรับรางวัลใหญ่เท่านั้น ---- */
-  mkChore({name:'เก็บที่นอนหลังตื่น',      emo:'🛏️', pts:5,  from:'05:00', due:'07:30',
-           routine:false, extra:true}),
-  mkChore({name:'ช่วยงานบ้าน',            emo:'🧹', pts:10, once:false, routine:false, extra:true}),
-  mkChore({name:'อ่านหนังสือ 20 นาที',    emo:'📚', pts:10, from:'18:00', due:'20:30',
-           routine:false, extra:true, days:WEEKDAYS}),
-  mkChore({name:'เรียนหมากรุก 30 นาที',   emo:'♟️', pts:15, from:'16:00', due:'20:00',
-           routine:false, extra:true, days:[1,3,5]}),
-  mkChore({name:'เล่นแล้วเก็บของเข้าที่เอง (ไม่ต้องบอก)', emo:'🧸', pts:10,
-           routine:false, extra:true, by:'parent'}),
+  mkChore({name:'ถึงโรงเรียนตรงเวลา',    emo:'🏫', pts:20, due:'08:00', days:WEEKDAYS, by:'parent'}),
+  mkChore({name:'ทำการบ้านเสร็จภายใน 1 ชม.', emo:'✏️', pts:18, from:'17:30', due:'18:30', days:WEEKDAYS}),
+  mkChore({name:'เก็บกระเป๋าพร้อมพรุ่งนี้', emo:'🎒', pts:16, from:'18:30', due:'20:45', days:WEEKDAYS}),
+  mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:14, from:'18:30', due:'20:50', days:WEEKDAYS}),
+  mkChore({name:'ตื่นนอน ลุกจากเตียง',    emo:'⏰', pts:12, from:'05:00', due:'06:40', days:WEEKDAYS}),
+  mkChore({name:'อาบน้ำเสร็จ',            emo:'🚿', pts:10, from:'06:00', due:'07:00', days:WEEKDAYS}),
+  mkChore({name:'กินข้าวเช้าเสร็จ',        emo:'🍳', pts:10, from:'06:30', due:'07:25', days:WEEKDAYS}),
+  /* ---- งานเสริม → เข้ากระเป๋า "แต้มพิเศษ" สำหรับรางวัลใหญ่เท่านั้น (เรียงตามความสำคัญ) ---- */
   mkChore({name:'วันนี้ไม่ทำให้แม่ต้องเสียงดัง', emo:'🤫', pts:15,
-           routine:false, extra:true, by:'parent', all:true})
+           routine:false, extra:true, by:'parent', all:true}),
+  mkChore({name:'พูดอังกฤษกับพ่อแม่ 10 นาที', emo:'🗣️', pts:12,
+           routine:false, extra:true, by:'parent'}),
+  mkChore({name:'เรียนหมากรุก 30 นาที',   emo:'♟️', pts:10, from:'16:00', due:'20:00',
+           routine:false, extra:true, days:[1,3,5]}),
+  mkChore({name:'อ่านหนังสือ 20 นาที',    emo:'📚', pts:8, from:'18:30', due:'20:30',
+           routine:false, extra:true, days:WEEKDAYS}),
+  mkChore({name:'เก็บที่นอนหลังตื่น',      emo:'🛏️', pts:7, from:'05:00', due:'07:30',
+           routine:false, extra:true}),
+  mkChore({name:'เล่นแล้วเก็บของเข้าที่เอง (ไม่ต้องบอก)', emo:'🧸', pts:5,
+           routine:false, extra:true, by:'parent'}),
+  mkChore({name:'ช่วยงานบ้าน',            emo:'🧹', pts:5, once:false, routine:false, extra:true})
 ];
 const DEF_PENALTIES = [
   {id:uid(), name:'ไม่เก็บของ ทิ้งเกลื่อน', emo:'🧺', pts:5},
@@ -278,9 +281,9 @@ const DEF_REWARDS = [
   {id:uid(), name:'Swensen',          emo:'🍨', cost:150, big:false, share:false, limitDay:1, limitWeek:3},
 
   {id:uid(), name:'ของเล่นงบ 200 บาท',  emo:'🧸', cost:150,  big:true, share:false, limitDay:0, limitWeek:0},
-  {id:uid(), name:'ของเล่นงบ 500 บาท',  emo:'🎁', cost:250,  big:true, share:false, limitDay:0, limitWeek:0},
-  {id:uid(), name:'Movie day',          emo:'🍿', cost:500,  big:true, share:true,  limitDay:0, limitWeek:0},
-  {id:uid(), name:'ของเล่นงบ 1,000 บาท', emo:'🚲', cost:600,  big:true, share:false, limitDay:0, limitWeek:0},
+  {id:uid(), name:'ของเล่นงบ 500 บาท',  emo:'🎁', cost:280,  big:true, share:false, limitDay:0, limitWeek:0},
+  {id:uid(), name:'Movie day',          emo:'🍿', cost:560,  big:true, share:true,  limitDay:0, limitWeek:0},
+  {id:uid(), name:'ของเล่นงบ 1,000 บาท', emo:'🚲', cost:700,  big:true, share:false, limitDay:0, limitWeek:0},
   {id:uid(), name:'ไปเที่ยว Space',      emo:'🌌', cost:6000, big:true, share:true,  limitDay:0, limitWeek:0}
 ];
 const DEF_KIDS = [
@@ -1641,7 +1644,7 @@ async function seedOrMigrate(){
   const cur = {};
   setSnap.docs.forEach(d => { if(d.id === 'settings') Object.assign(cur, d.data()); });
 
-  if(!cur.rewardsV3){        // แยกเป็น 2 กระเป๋าแต้ม + รางวัล/กิจวัตรชุดใหม่
+  if(!cur.rewardsV4){        // แยก 2 กระเป๋าแต้ม + จัดลำดับความสำคัญของแต้มใหม่
     const b = writeBatch(db);
     (await getDocs(col('rewards'))).docs.forEach(d => b.delete(dref('rewards', d.id)));
     DEF_REWARDS.forEach(r => b.set(dref('rewards', r.id), r));
@@ -1659,7 +1662,7 @@ async function seedOrMigrate(){
       if(d.data().extra === undefined) b.update(dref('kids', d.id), {extra:0});
     });
     b.set(settingsRef(), Object.assign({}, DEF_SETTINGS, cur,
-      {rewardsV3:true, perfectBonus:20, rewardsV2:true, extrasV1:true}));
+      {rewardsV4:true, rewardsV3:true, rewardsV2:true, extrasV1:true, perfectBonus:20}));
     await b.commit();
   }
 }
