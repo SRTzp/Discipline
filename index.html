@@ -60,7 +60,13 @@
     background:var(--card);margin-bottom:8px;box-shadow:0 1px 7px rgba(31,44,71,.05)}
   .item.due-now{box-shadow:0 0 0 2px var(--gold),0 1px 7px rgba(31,44,71,.05)}
   .item.due-late{box-shadow:0 0 0 2px var(--warn),0 1px 7px rgba(31,44,71,.05)}
-  .item .emo{font-size:26px;flex:0 0 auto;width:32px;text-align:center}
+  .item .emo{font-size:34px;flex:0 0 auto;width:44px;text-align:center;line-height:1.1}
+  .item.ready{background:#fff;box-shadow:0 0 0 3px var(--good), 0 2px 10px rgba(31,44,71,.08)}
+  .item.warn{box-shadow:0 0 0 3px var(--warn), 0 2px 10px rgba(31,44,71,.08)}
+  .item.locked{opacity:.4}
+  .btn-done{min-width:96px;font-size:17px;padding:13px 14px;font-weight:800}
+  .state{font-size:26px;width:40px;text-align:center;flex:0 0 auto}
+  .bignum{font-variant-numeric:tabular-nums;font-weight:800}
   .item .txt{flex:1;min-width:0}
   .item .txt b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .tag{font-size:12px;padding:3px 9px;border-radius:999px;font-weight:700;white-space:nowrap}
@@ -264,12 +270,13 @@ const DEF_CHORES = [
            routine:false, extra:true, by:'parent'}),
   mkChore({name:'ช่วยงานบ้าน',            emo:'🧹', pts:5, once:false, routine:false, extra:true})
 ];
+/* all:true = หักทุกคนพร้อมกัน (เรื่องที่ผิดทั้งคู่ ไม่ต้องหาว่าใครเริ่ม) */
 const DEF_PENALTIES = [
-  {id:uid(), name:'ไม่เก็บของ ทิ้งเกลื่อน', emo:'🧺', pts:5},
-  {id:uid(), name:'ต้องเรียกเกิน 3 ครั้ง',  emo:'📢', pts:10},
-  {id:uid(), name:'ทะเลาะกับพี่น้อง',       emo:'⚡', pts:10},
-  {id:uid(), name:'เถียง/พูดไม่เพราะ',      emo:'😤', pts:15},
-  {id:uid(), name:'เล่นเกินเวลาที่ตกลง',     emo:'⏰', pts:15}
+  {id:uid(), name:'ไม่เก็บของ ทิ้งเกลื่อน', emo:'🧺', pts:5,  all:false},
+  {id:uid(), name:'ต้องเรียกเกิน 3 ครั้ง',  emo:'📢', pts:10, all:false},
+  {id:uid(), name:'ทะเลาะกับพี่น้อง',       emo:'⚡', pts:10, all:true},
+  {id:uid(), name:'เถียง/พูดไม่เพราะ',      emo:'😤', pts:15, all:false},
+  {id:uid(), name:'เล่นเกินเวลาที่ตกลง',     emo:'⏰', pts:15, all:false}
 ];
 /* รางวัลเล็ก ใช้ "แต้มประจำวัน" · รางวัลใหญ่ ใช้ "แต้มพิเศษ" เท่านั้น (share = หารกันจ่ายได้)
    limitDay / limitWeek = เพดานจำนวนครั้ง (0 = ไม่จำกัด) */
@@ -633,41 +640,52 @@ function go(screen, tab){
 function setTab(t){ view.tab=t; render(); }
 
 /* ---------- หน้าเด็ก ---------- */
+/* แถวงาน — ออกแบบให้เด็กที่ยังอ่านไม่ออกดูรู้เรื่อง
+   ใช้ ไอคอนใหญ่ + สีขอบ + ตัวเลขเวลา แทนประโยคยาว ๆ */
 function choreRow(c, kidId){
   const used = c.once && doneToday(kidId, c.name);
   const t = evalTiming(c);
   const early = !used && c.by !== 'parent' && !windowOpen(c);
   const prev  = !used && !early ? blockedBy(c, kidId) : null;
-  let sub, cls = '', btn;
+  let state, sub, cls = '', btn;
+
   if(used){
     const done = S.log.find(l => l.kidId===kidId && l.kind==='chore' && l.name===c.name && dstr(l.ts)===todayStr());
-    sub = done ? `เสร็จ ${fmtClock(done.ts)} · ${done.status ? STATUS_TXT[done.status] : 'เรียบร้อย'}` : 'ส่งแล้ว รอตรวจ';
-    btn = `<button class="btn-sm" disabled>✓</button>`;
+    state = '✅';
+    sub = done ? `<span class="bignum">${fmtClock(done.ts)}</span>` : '⏳';
+    cls = 'locked';
+    btn = '';
   }else if(c.by === 'parent'){
-    sub = `คุณพ่อคุณแม่เป็นคนกดให้ · ก่อน ${c.due||'—'}`;
-    btn = `<button class="btn-sm" disabled>🔒</button>`;
+    state = '👩';
+    sub = c.due ? `<span class="bignum">${c.due}</span>` : '';
+    cls = 'locked';
+    btn = '';
   }else if(early){
-    const left = minsUntil(c.from);
-    sub = `⏳ ยังไม่ถึงเวลา — เริ่มได้ ${c.from}${left<60?` (อีก ${left} นาที)`:''}`;
-    btn = `<button class="btn-sm" disabled>⏳</button>`;
+    state = '⏳';
+    sub = `<span class="bignum">${c.from}</span>`;
+    cls = 'locked';
+    btn = '';
   }else if(prev){
-    sub = `🔒 ต้องทำ "${esc(prev.name)}" ให้เสร็จก่อน`;
-    btn = `<button class="btn-sm" disabled>🔒</button>`;
-  }else if(c.due){
-    const mins = Math.round((dueDateOf(c.due) - now())/60000);
-    if(mins > 0){ sub = `ทำได้เลย! ก่อน ${c.due} · เหลือ ${mins} นาที`; cls='due-now'; }
-    else if(t.status === 'late'){ sub = `สาย ${t.lateMin} นาที · ได้ ${t.pts} แต้ม`; cls='due-late'; }
-    else { sub = `สาย ${t.lateMin} นาที · ไม่ได้แต้มแล้ว`; cls='due-late'; }
-    btn = `<button class="btn-good btn-sm" onclick="doChore('${c.id}')">${cfg().approveChores?'ส่ง':'เสร็จ'}</button>`;
+    state = '🔒';
+    sub = `${prev.emo}`;
+    cls = 'locked';
+    btn = '';
   }else{
-    sub = c.once ? 'วันละครั้ง' : 'ทำได้หลายครั้ง';
-    btn = `<button class="btn-good btn-sm" onclick="doChore('${c.id}')">${cfg().approveChores?'ส่ง':'เสร็จ'}</button>`;
+    const mins = c.due ? Math.round((dueDateOf(c.due) - now())/60000) : null;
+    if(!c.due){ state = '👉'; sub = ''; cls = 'ready'; }
+    else if(mins > 0){ state = '👉'; cls = 'ready';
+      sub = `<span class="bignum">${c.due}</span> <span style="color:var(--good)">${mins}′</span>`; }
+    else if(t.status === 'late'){ state = '⚠️'; cls = 'warn';
+      sub = `<span class="bignum">${c.due}</span> <span style="color:var(--gold)">+${t.lateMin}′</span>`; }
+    else { state = '⚠️'; cls = 'warn';
+      sub = `<span class="bignum">${c.due}</span> <span style="color:var(--warn)">+${t.lateMin}′</span>`; }
+    btn = `<button class="btn-good btn-done" onclick="doChore('${c.id}')">✓ Done</button>`;
   }
   const shownPts = (!used && c.due) ? t.pts : Number(c.pts);
-  const dim = used || early || prev || c.by==='parent';
-  return `<div class="item ${dim?'':cls}" style="${dim?'opacity:.5':''}">
+  return `<div class="item ${cls}">
     <div class="emo">${c.emo}</div>
     <div class="txt"><b>${esc(c.name)}</b><span class="muted">${sub}</span></div>
+    <span class="state">${state}</span>
     <span class="tag ${shownPts>0?'tag-plus':'tag-minus'}">+${shownPts}</span>
     ${btn}</div>`;
 }
@@ -695,13 +713,11 @@ function todayCard(k){
     </div>
     <div class="prog" style="margin-top:10px"><i style="width:${Math.min(100,s.pct)}%;background:${col}"></i></div>
     <div class="muted">${msg}</div>
-    <div class="muted" style="margin-top:6px">ทำครบตรงเวลาทุกข้อ = 100% และได้ 💎 โบนัส +${cfg().perfectBonus} แต้มพิเศษ</div>
     ${(s.extra || s.waiting || s.minus) ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">
       ${s.extra   ? `<span class="tag tag-cost">💎 +${s.extra} แต้มพิเศษวันนี้</span>` : ''}
       ${s.waiting ? `<span class="tag tag-wait">รอตรวจอีก ${s.waiting}</span>` : ''}
       ${s.minus   ? `<span class="tag tag-minus">${s.minus} จากการหักแต้ม</span>` : ''}
     </div>` : ''}
-    ${pr.left.length ? `<div class="muted" style="margin-top:8px">เหลืออีก: ${pr.left.map(c=>c.emo+' '+esc(c.name)).join(' · ')}</div>` : ''}
   </div>`;
 }
 function viewKid(){
@@ -719,7 +735,7 @@ function viewKid(){
       <div class="sec-title" style="margin:0 0 6px">⏳ รอผู้ปกครองตรวจ</div>
       ${waiting.map(p => `<div class="log-line" style="border-color:#d8e0ee">
         <span style="font-size:19px">${p.emo}</span>
-        <span style="flex:1">${esc(p.name)}<span class="muted" style="display:block">ส่ง ${fmtClock(p.ts)}${p.due?' · '+(p.status==='ontime'?'ทันเวลา':'สาย '+p.lateMin+' นาที'):''}</span></span>
+        <span style="flex:1">${esc(p.name)}<span class="muted bignum" style="display:block">${fmtClock(p.ts)}</span></span>
         <span class="tag tag-wait">+${p.pts}</span></div>`).join('')}</div>` : '';
     const today = S.chores.filter(c => appliesOn(c));
     const timed = today.filter(c => c.due).sort((a,b)=> a.due<b.due?-1:1);
@@ -857,11 +873,7 @@ async function doChore(id){
       }
     }catch(e){ fail(e); }
   };
-  if(t.status === 'toolate')
-    openConfirm('สายเกินไปแล้ว', `ตอนนี้ ${fmtClock(now())} — สายกว่ากำหนด (${c.due}) ${t.lateMin} นาที รอบนี้ไม่ได้แต้ม แต่ยังนับว่าทำครบสำหรับรางวัลวันนี้นะ`, commit);
-  else if(t.status === 'late')
-    openConfirm('สายนิดหน่อย', `ตอนนี้ ${fmtClock(now())} — สาย ${t.lateMin} นาที จะได้ ${t.pts} แต้ม (เต็ม ${c.pts})`, commit);
-  else commit();
+  commit();          // กดแล้วบันทึกเลย ไม่ถามซ้ำ — ผลลัพธ์ไปแสดงในหน้าสรุปแทน
 }
 /* ---------- แลกของรางวัล (รางวัลใหญ่บางอย่างหารกันจ่ายได้) ---------- */
 const potOf = r => r.big ? 'extra' : 'daily';
@@ -1057,7 +1069,15 @@ function parentPoints(){
         <button class="btn-good btn-sm" ${left.length?'':'disabled'}
           onclick="giveAll('${c.id}')">${left.length?'ให้ทุกคน':'✓'}</button></div>`;
     }).join('')}</div>` : '';
-  return allBox + S.kids.map(k => {
+  const allPens = S.penalties.filter(p => p.all);
+  const penBox = (allPens.length && S.kids.length > 1) ? `<div class="card" style="background:var(--warn-soft)">
+    <div class="sec-title" style="margin:0 0 4px">⚡ หักแต้มทั้งบ้านพร้อมกัน</div>
+    <div class="muted" style="margin-bottom:10px">เรื่องที่ผิดทั้งคู่ กดครั้งเดียวหักทุกคน — ไม่ต้องเสียเวลาหาว่าใครเริ่มก่อน</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px">
+      ${allPens.map(p => `<button class="btn-warn btn-sm" style="background:#fff"
+        onclick="applyPenaltyAll('${p.id}')">${p.emo} ${esc(p.name)} −${p.pts} ทุกคน</button>`).join('')}
+    </div></div>` : '';
+  return allBox + penBox + S.kids.map(k => {
     const pr = routineProgress(k.id);
     const sc = todayScore(k.id);
     const parentChores = S.chores.filter(c => c.by==='parent' && !c.all && appliesOn(c) && !doneToday(k.id, c.name));
@@ -1078,7 +1098,7 @@ function parentPoints(){
       <div class="sec-title" style="margin:14px 0 8px">หักแต้มด่วน</div>
       <div class="row" style="flex-wrap:wrap;gap:6px">
         ${S.penalties.map(p => `<button class="btn-warn btn-sm"
-          onclick="applyPenalty('${k.id}','${p.id}')">${p.emo} ${esc(p.name)} −${p.pts}</button>`).join('')
+          onclick="applyPenalty('${k.id}','${p.id}')">${p.emo} ${esc(p.name)} −${p.pts}${p.all?' (เฉพาะคนนี้)':''}</button>`).join('')
           || '<span class="muted">ยังไม่มีรายการหักแต้ม</span>'}</div>
       <div class="sec-title" style="margin:14px 0 8px">ให้แต้มด่วน (กดแทนลูกได้)</div>
       <div class="row" style="flex-wrap:wrap;gap:6px">
@@ -1086,6 +1106,17 @@ function parentPoints(){
           onclick="giveChore('${k.id}','${c.id}')">${c.emo} ${esc(c.name)} +${c.pts}</button>`).join('')}
       </div></div>`;
   }).join('') || '<div class="empty">ยังไม่มีเด็ก</div>';
+}
+function applyPenaltyAll(pid){
+  const p = S.penalties.find(x => x.id===pid); if(!p) return;
+  if(S.kids.length < 2){ toast('มีเด็กคนเดียว ใช้ปุ่มหักรายคนได้เลย'); return; }
+  openConfirm(p.emo + ' ' + p.name,
+    `หัก ${S.kids.map(k=>k.name).join(' และ ')} คนละ ${p.pts} แต้มประจำวัน`, async () => {
+    try{
+      for(const k of S.kids) await addLog(logEntry(k.id,'penalty',p.name,p.emo,-Number(p.pts),{pot:'daily'}));
+      toast(`หักคนละ ${p.pts} แต้ม (${S.kids.length} คน)`);
+    }catch(e){ fail(e); }
+  });
 }
 async function giveAll(cid){
   const c = S.chores.find(x => x.id===cid); if(!c) return;
@@ -1229,8 +1260,8 @@ function parentManage(){
     ${S.chores.filter(x=>!x.routine).map(choreRowM).join('') || '<div class="empty">ยังไม่มี</div>'}
     <button class="btn-primary btn-full" onclick="editItem('chores')">+ เพิ่มงาน</button>
 
-    <div class="sec-title">⚠️ รายการหักแต้ม</div>
-    ${S.penalties.map(p => simpleRow('penalties', p, 'tag-minus', '−'+p.pts)).join('')}
+    <div class="sec-title">⚠️ รายการหักแต้ม (หักจาก 🎈 แต้มประจำวัน)</div>
+    ${S.penalties.map(p => simpleRow('penalties', p, 'tag-minus', '−'+p.pts+(p.all?' 👥':''))).join('')}
     <button class="btn-primary btn-full" onclick="editItem('penalties')">+ เพิ่มรายการหักแต้ม</button>
 
     <div class="sec-title">🎈 รางวัลเล็ก — ใช้แต้มประจำวัน</div>
@@ -1581,14 +1612,16 @@ function editItem(list, id){
   openForm({title:(x?'แก้ไข':'เพิ่ม')+'รายการหักแต้ม',
     fields:[{key:'name', label:'พฤติกรรม', type:'text', value:x?x.name:''},
             {key:'emo', label:'ไอคอน', type:'emoji', value:x?x.emo:'⚠️'},
-            {key:'pts', label:'หักกี่แต้ม', type:'number', value:x?x.pts:10}],
+            {key:'pts', label:'หักกี่แต้ม (จากแต้มประจำวัน)', type:'number', value:x?x.pts:10},
+            {key:'all', label:'หักทั้งบ้านพร้อมกันได้ไหม', type:'switch', value:x?!!x.all:false,
+             onText:'ผิดทั้งคู่ (หักทุกคน)', offText:'หักทีละคน'}],
     async onSave(v){
       if(!v.name || !v.name.trim()) return 'ใส่ชื่อด้วยนะ';
       const n = parseInt(v.pts,10);
       if(!n || n<=0) return 'แต้มต้องมากกว่า 0';
       try{
         const idd = x ? x.id : uid();
-        await setDoc(dref('penalties', idd), {id:idd, name:v.name.trim(), emo:v.emo||'⚠️', pts:n});
+        await setDoc(dref('penalties', idd), {id:idd, name:v.name.trim(), emo:v.emo||'⚠️', pts:n, all: !!v.all});
       }catch(e){ fail(e); }
     }});
 }
@@ -1661,6 +1694,18 @@ async function seedOrMigrate(){
     (await getDocs(col('kids'))).docs.forEach(d => {          // เปิดกระเป๋าแต้มพิเศษให้ทุกคน
       if(d.data().extra === undefined) b.update(dref('kids', d.id), {extra:0});
     });
+    // รายการหักแต้ม: เติมธง "หักทั้งคู่" โดยไม่ทับของที่ตั้งเอง
+    const pens = await getDocs(col('penalties'));
+    let hasFight = false;
+    pens.docs.forEach(d => {
+      const o = d.data();
+      if(o.name && o.name.indexOf('ทะเลาะ') >= 0){ hasFight = true; b.update(dref('penalties', d.id), {all:true}); }
+      else if(o.all === undefined) b.update(dref('penalties', d.id), {all:false});
+    });
+    if(!hasFight){
+      const f = DEF_PENALTIES.find(x => x.name.indexOf('ทะเลาะ') >= 0);
+      if(f) b.set(dref('penalties', f.id), f);
+    }
     b.set(settingsRef(), Object.assign({}, DEF_SETTINGS, cur,
       {rewardsV4:true, rewardsV3:true, rewardsV2:true, extrasV1:true, perfectBonus:20}));
     await b.commit();
@@ -1736,7 +1781,7 @@ onAuthStateChanged(auth, async user => {
 /* ---------- ให้ปุ่มใน HTML เรียกใช้ได้ ---------- */
 Object.assign(window, {
   askPin, pinTap, pinDel, go, setTab, doChore, redeem, shareWith, shareAlone, giveAll,
-  approve, reject, markParent, giveChore, applyPenalty, openAdjust, undoLog,
+  approve, reject, markParent, giveChore, applyPenalty, applyPenaltyAll, openAdjust, undoLog,
   editKid, editItem, delItem, setOpt, editBonus, editAutoSec, editIdleSec, changeParentPin, doSignOut,
   stayHere, goHomeNow,
   openForm, openConfirm, confirmYes, closeModal, setVal, toggleDay, setDays,
