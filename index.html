@@ -589,21 +589,22 @@ function render(){
   else if(view.screen === 'parent') app.innerHTML = viewParent();
   renderModal();
 }
-/* กิจกรรมล่าสุดของลูก ๆ วันนี้ — พ่อแม่เห็นจากหน้าหลักได้เลย */
+/* แจ้งเตือนบนหน้าหลัก — โชว์เฉพาะของที่ยังต้องจัดการ หรือของใหม่ที่ยังไม่ได้ดู
+   พอเข้าโหมดผู้ปกครอง (ถือว่าดูแล้ว) และเคลียร์คิวหมด กล่องนี้จะหายไปเอง */
 function homeFeed(){
   const t = todayStr(), seen = lastSeen();
   const items = S.pending
     .map(p => ({ts:p.ts, kidId:p.kidId, emo:p.emo, name:p.name, wait:true,
                 tag: p.type==='chore' ? '+'+p.pts : '−'+p.pts, pot:p.pot||'daily'}))
-    .concat(S.log.filter(l => dstr(l.ts) === t && l.kind !== 'adjust')
+    .concat(S.log.filter(l => dstr(l.ts) === t && l.kind !== 'adjust' && l.ts > seen)
       .map(l => ({ts:l.ts, kidId:l.kidId, emo:l.emo, name:l.name, wait:false,
                   tag:(l.delta>=0?'+':'')+l.delta, pot:l.pot||'daily'})))
-    .sort((a,b) => b.ts - a.ts).slice(0, 5);
+    .sort((a,b) => b.ts - a.ts).slice(0, 6);
   if(!items.length) return '';
   const nNew = items.filter(i => i.ts > seen).length;
   return `<div class="card" style="margin-top:18px">
     <div class="row-between" style="margin-bottom:4px">
-      <span class="sec-title" style="margin:0">🔔 ล่าสุดวันนี้</span>
+      <span class="sec-title" style="margin:0">🔔 มีอะไรใหม่</span>
       ${nNew ? `<span class="cnt" style="margin:0">${nNew} ใหม่</span>` : ''}
     </div>
     ${items.map(i => {
