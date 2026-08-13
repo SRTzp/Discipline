@@ -621,6 +621,10 @@ function viewPin(){
     <div style="text-align:center;padding:22px 0 6px">${head}
       <h2 style="margin-top:10px">${isParent ? 'รหัสผู้ปกครอง' : 'สวัสดี ' + esc(k?k.name:'')}</h2>
       <div class="muted">ใส่รหัส 4 หลัก</div></div>
+    ${isParent && faceIdReady() ? `<div style="max-width:280px;margin:14px auto 0">
+      <button class="btn-primary btn-full" style="font-size:17px;padding:14px"
+        onclick="faceIdUnlock()">🙂 ปลดล็อกด้วย Face ID</button>
+      <div class="muted" style="text-align:center;margin-top:10px">หรือใส่รหัส 4 หลัก</div></div>` : ''}
     <div class="dots">${dots}</div>
     <div class="pinpad">${keys}
       <button class="btn-ghost" onclick="go('pick')">ยกเลิก</button>
@@ -1125,12 +1129,21 @@ function parentPoints(){
         <div class="row">
           <button class="btn-good btn-sm" onclick="openAdjust('${k.id}',1)">+ ให้</button>
           <button class="btn-warn btn-sm" onclick="openAdjust('${k.id}',-1)">− หัก</button></div></div>
-      ${parentChores.length ? `<div class="sec-title" style="margin:0 0 8px">🏫 รายการที่คุณเป็นคนกดให้</div>
-        ${parentChores.map(c => `<div class="item" style="box-shadow:none;background:var(--bg)">
+      ${parentChores.length ? `<div class="sec-title" style="margin:0 0 4px">🏫 รายการที่คุณเป็นคนกดให้</div>
+        <div class="muted" style="margin-bottom:10px">กดตาม<b>สิ่งที่เกิดขึ้นจริง</b> — ระบบไม่ดูว่าคุณมากดตอนกี่โมง
+          (ไปส่งตอน 7:55 แล้วมากดตอน 9:30 ก็กด "ตรงเวลา" ได้)</div>
+        ${parentChores.map(c => {
+          const half = Math.max(0, Math.round(Number(c.pts)*Number(c.latePct||50)/100));
+          return `<div class="item" style="box-shadow:none;background:var(--bg);flex-wrap:wrap">
           <div class="emo">${c.emo}</div>
-          <div class="txt"><b>${esc(c.name)}</b><span class="muted">กำหนด ${c.due||'—'} · +${c.pts}</span></div>
-          <button class="btn-good btn-sm" onclick="markParent('${k.id}','${c.id}',true)">ทันเวลา</button>
-          <button class="btn-warn btn-sm" onclick="markParent('${k.id}','${c.id}',false)">สาย</button></div>`).join('')}` : ''}
+          <div class="txt"><b>${esc(c.name)}</b><span class="muted">กำหนด ${c.due||'—'}</span></div>
+          <div class="row" style="gap:6px;width:100%;margin-top:8px">
+            <button class="btn-good btn-sm" style="flex:1" onclick="markParent('${k.id}','${c.id}','ontime')">✓ ตรงเวลา +${c.pts}</button>
+            <button class="btn-sm" style="flex:1;background:var(--gold-soft);color:var(--gold)"
+              onclick="markParent('${k.id}','${c.id}','late')">⚠️ สาย +${half}</button>
+            <button class="btn-warn btn-sm" style="flex:1" onclick="markParent('${k.id}','${c.id}','miss')">✕ สายมาก 0</button>
+          </div></div>`;
+        }).join('')}` : ''}
       <div class="sec-title" style="margin:14px 0 8px">หักแต้มด่วน</div>
       <div class="row" style="flex-wrap:wrap;gap:6px">
         ${S.penalties.map(p => `<button class="btn-warn btn-sm"
@@ -1166,15 +1179,21 @@ async function giveAll(cid){
     }catch(e){ fail(e); }
   });
 }
-async function markParent(kidId, cid, onTime){
+/* mode: 'ontime' | 'late' | 'miss' — พ่อแม่เป็นคนตัดสินจากสิ่งที่เกิดขึ้นจริง ไม่ใช่เวลาที่กด */
+async function markParent(kidId, cid, mode){
   const c = S.chores.find(x => x.id===cid); if(!c) return;
   if(doneToday(kidId, c.name)){ toast('บันทึกไปแล้ววันนี้'); return; }
-  const pts = onTime ? Number(c.pts) : Math.max(0, Math.round(Number(c.pts)*Number(c.latePct||50)/100));
+  if(mode === true) mode = 'ontime';
+  if(mode === false) mode = 'late';
+  const full = Number(c.pts);
+  const pts = mode === 'ontime' ? full
+            : mode === 'late'   ? Math.max(0, Math.round(full*Number(c.latePct||50)/100)) : 0;
+  const status = mode === 'ontime' ? 'ontime' : mode === 'late' ? 'late' : 'toolate';
   try{
     await addLog(logEntry(kidId,'chore',c.name,c.emo,pts,
-      {pot: c.routine ? 'daily' : 'extra', due:c.due||'',
-       status:onTime?'ontime':'late', lateMin:onTime?0:Number(c.grace||10)}));
-    toast(onTime ? `ทันเวลา +${pts} แต้ม` : `สาย ได้ ${pts} แต้ม`);
+      {pot: c.routine ? 'daily' : 'extra', due:c.due||'', status,
+       lateMin: mode === 'ontime' ? 0 : Number(c.grace||10)}));
+    toast(pts > 0 ? `บันทึกแล้ว +${pts} แต้ม` : 'บันทึกแล้ว ไม่ได้แต้มรอบนี้');
     await checkPerfectDay(kidId);
   }catch(e){ fail(e); }
 }
@@ -1314,6 +1333,13 @@ function parentManage(){
     <div class="card">
       <div class="row-between"><span>รหัสผู้ปกครอง</span>
         <button class="btn-sm" onclick="changeParentPin()">เปลี่ยนรหัส</button></div>
+      <div class="row-between" style="margin-top:12px">
+        <span>🙂 Face ID / Touch ID <span class="muted">(เครื่องนี้)</span></span>
+        ${!faceIdSupported() ? '<span class="muted">เครื่องนี้ไม่รองรับ</span>'
+          : faceIdReady() ? `<button class="btn-sm btn-warn" onclick="faceIdRemove()">ปิด</button>`
+          : `<button class="btn-sm btn-primary" onclick="faceIdSetup()">เปิดใช้</button>`}
+      </div>
+      <div class="muted" style="margin-top:8px">ตั้งแยกแต่ละเครื่อง · รหัส 4 หลักยังใช้ได้เสมอเผื่อ Face ID ไม่ผ่าน</div>
       <button class="btn-sm btn-warn btn-full" style="margin-top:12px" onclick="doSignOut()">ออกจากระบบเครื่องนี้</button>
       <div class="muted" style="margin-top:10px">ข้อมูลอยู่ใน Firebase ของคุณเอง · ทุกเครื่องเห็นตรงกันทันที</div></div>`;
 }
@@ -1776,6 +1802,60 @@ async function doSignIn(){
   }
 }
 
+/* ============================================================
+   Face ID / Touch ID แทนรหัสผู้ปกครอง (WebAuthn)
+   ผูกกับ "เครื่องนี้" เท่านั้น — แต่ละเครื่องต้องตั้งเอง และรหัส 4 หลักยังใช้ได้เสมอ
+   ============================================================ */
+const FID_KEY = 'discipline.faceid';
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)))
+  .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64 = str => {
+  const t = str.replace(/-/g,'+').replace(/_/g,'/');
+  const bin = atob(t + '='.repeat((4 - t.length % 4) % 4));
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+};
+const faceIdSupported = () => !!(window.PublicKeyCredential && navigator.credentials);
+const faceIdReady = () => faceIdSupported() && !!localStorage.getItem(FID_KEY);
+
+async function faceIdSetup(){
+  if(!faceIdSupported()){ toast('เครื่องนี้ไม่รองรับ Face ID / Touch ID'); return; }
+  try{
+    const cred = await navigator.credentials.create({publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: {name:'Discipline'},
+      user: {id: crypto.getRandomValues(new Uint8Array(16)), name:'parent', displayName:'ผู้ปกครอง'},
+      pubKeyCredParams: [{type:'public-key', alg:-7}, {type:'public-key', alg:-257}],
+      authenticatorSelection: {authenticatorAttachment:'platform', userVerification:'required'},
+      timeout: 60000, attestation:'none'
+    }});
+    localStorage.setItem(FID_KEY, b64(cred.rawId));
+    toast('เปิด Face ID สำหรับเครื่องนี้แล้ว 🙂');
+    render();
+  }catch(e){
+    console.error(e);
+    toast(e && e.name === 'NotAllowedError' ? 'ยกเลิกแล้ว' : 'ตั้งค่าไม่สำเร็จ — ลองใหม่อีกครั้ง');
+  }
+}
+function faceIdRemove(){
+  openConfirm('ปิด Face ID เครื่องนี้', 'ต่อไปต้องใช้รหัส 4 หลักเข้าโหมดผู้ปกครอง', () => {
+    localStorage.removeItem(FID_KEY); toast('ปิดแล้ว'); render();
+  });
+}
+async function faceIdUnlock(){
+  if(!faceIdReady()) return;
+  try{
+    await navigator.credentials.get({publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{type:'public-key', id: unb64(localStorage.getItem(FID_KEY))}],
+      userVerification:'required', timeout: 60000
+    }});
+    view.screen='parent'; view.tab='review'; view.pinBuf=''; render();   // ผ่านการยืนยันตัวตนของเครื่องแล้ว
+  }catch(e){
+    if(e && e.name === 'NotAllowedError') toast('ยกเลิก หรือไม่ผ่าน — ใช้รหัส 4 หลักแทนได้');
+    else { console.error(e); toast('ปลดล็อกไม่สำเร็จ ใช้รหัส 4 หลักแทน'); }
+  }
+}
+
 /* ---------- สถานะเน็ต ---------- */
 function netBar(){
   document.getElementById('net').innerHTML = navigator.onLine ? ''
@@ -1821,7 +1901,8 @@ Object.assign(window, {
   editKid, editItem, delItem, setOpt, editBonus, editAutoSec, editIdleSec, changeParentPin, doSignOut,
   stayHere, goHomeNow,
   openForm, openConfirm, confirmYes, closeModal, setVal, toggleDay, setDays,
-  submitForm, pickPhoto, clearPhoto, pinAskTap, pinAskDel, doSignIn
+  submitForm, pickPhoto, clearPhoto, pinAskTap, pinAskDel, doSignIn,
+  faceIdSetup, faceIdRemove, faceIdUnlock
 });
 </script>
 </body>
