@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f6f2ec">
-<title>แต้มวินัย</title>
+<title>Discipline</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
 <style>
   :root{
@@ -67,6 +67,14 @@
   .btn-done{min-width:96px;font-size:17px;padding:13px 14px;font-weight:800}
   .state{font-size:26px;width:40px;text-align:center;flex:0 0 auto}
   .bignum{font-variant-numeric:tabular-nums;font-weight:800}
+  .strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .chip{width:48px;height:56px;border-radius:13px;background:var(--bg);display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:23px;line-height:1}
+  .chip small{font-size:14px;line-height:1}
+  .chip.done{background:var(--good-soft)}
+  .chip.now{background:#fff;box-shadow:0 0 0 3px var(--good)}
+  .chip.late{background:var(--warn-soft);box-shadow:0 0 0 2px var(--warn)}
+  .chip.wait{opacity:.4}
   .item .txt{flex:1;min-width:0}
   .item .txt b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .tag{font-size:12px;padding:3px 9px;border-radius:999px;font-weight:700;white-space:nowrap}
@@ -199,7 +207,7 @@
 
 <script type="module">
 /* ============================================================
-   แต้มวินัย — เวอร์ชัน Firebase Firestore
+   Discipline — เวอร์ชัน Firebase Firestore
    วางบน GitHub Pages ได้เลย · ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์
    ใช้งานตอนเน็ตหลุดได้ แล้วซิงก์ให้เองเมื่อsกลับมาออนไลน์
    ============================================================ */
@@ -590,7 +598,7 @@ function viewPick(){
   return `
     <div style="text-align:center;padding:22px 0 16px">
       <div class="clock" style="font-size:34px;color:var(--navy)">${fmtClock(now())}</div>
-      <h1 style="margin-top:6px">แต้มวินัย</h1>
+      <h1 style="margin-top:6px">Discipline</h1>
       <div class="muted">ทำครบ ตรงเวลา ได้รางวัล</div></div>
     <div class="grid">${tiles || '<div class="empty">ยังไม่มีเด็ก — เข้าโหมดผู้ปกครองเพื่อเพิ่ม</div>'}</div>
     <div style="text-align:center;margin-top:24px">
@@ -640,13 +648,37 @@ function go(screen, tab){
 function setTab(t){ view.tab=t; render(); }
 
 /* ---------- หน้าเด็ก ---------- */
+/* สถานะของงานหนึ่งชิ้น — ใช้ทั้งในแถวงานและแถบติดตามความคืบหน้า */
+function choreState(c, kidId){
+  if(c.once && doneToday(kidId, c.name)) return 'done';
+  if(c.by === 'parent') return 'parent';
+  if(!windowOpen(c)) return 'early';
+  if(blockedBy(c, kidId)) return 'locked';
+  const t = evalTiming(c);
+  return (t.status === 'late' || t.status === 'toolate') ? 'late' : 'ready';
+}
+const STATE_ICON = {done:'✅', parent:'👩', early:'⏳', locked:'🔒', late:'⚠️', ready:'👉'};
+
+/* แถบติดตาม — เห็นทั้งวันในแถวเดียว ว่าทำอะไรไปแล้วบ้าง */
+function taskStrip(kidId){
+  const list = routineToday().slice().sort((a,b) => (a.due||'99') < (b.due||'99') ? -1 : 1);
+  if(!list.length) return '';
+  const cls = {done:'done', ready:'now', late:'late', early:'wait', locked:'wait', parent:'wait'};
+  return `<div class="strip">${list.map(c => {
+    const st = choreState(c, kidId);
+    return `<div class="chip ${cls[st]}" title="${esc(c.name)}">
+      <span>${c.emo}</span><small>${STATE_ICON[st]}</small></div>`;
+  }).join('')}</div>`;
+}
+
 /* แถวงาน — ออกแบบให้เด็กที่ยังอ่านไม่ออกดูรู้เรื่อง
    ใช้ ไอคอนใหญ่ + สีขอบ + ตัวเลขเวลา แทนประโยคยาว ๆ */
 function choreRow(c, kidId){
-  const used = c.once && doneToday(kidId, c.name);
+  const st = choreState(c, kidId);          // ใช้ตัวเดียวกับแถบติดตาม จะได้ไม่มีทางขัดกัน
+  const used = st === 'done';
   const t = evalTiming(c);
-  const early = !used && c.by !== 'parent' && !windowOpen(c);
-  const prev  = !used && !early ? blockedBy(c, kidId) : null;
+  const early = st === 'early';
+  const prev  = st === 'locked' ? blockedBy(c, kidId) : null;
   let state, sub, cls = '', btn;
 
   if(used){
@@ -712,7 +744,11 @@ function todayCard(k){
         <div style="font-size:30px;font-weight:800;color:${col};line-height:1">${s.pct}%</div></div>
     </div>
     <div class="prog" style="margin-top:10px"><i style="width:${Math.min(100,s.pct)}%;background:${col}"></i></div>
-    <div class="muted">${msg}</div>
+    <div class="row-between">
+      <span class="muted">${msg}</span>
+      <b class="bignum" style="color:${col};font-size:15px">${pr.done}/${pr.total}</b>
+    </div>
+    ${taskStrip(k.id)}
     ${(s.extra || s.waiting || s.minus) ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">
       ${s.extra   ? `<span class="tag tag-cost">💎 +${s.extra} แต้มพิเศษวันนี้</span>` : ''}
       ${s.waiting ? `<span class="tag tag-wait">รอตรวจอีก ${s.waiting}</span>` : ''}
@@ -1717,7 +1753,7 @@ function viewLogin(msg){
   document.getElementById('app').innerHTML = `
     <div class="login">
       <div style="font-size:40px">⭐</div>
-      <h1>แต้มวินัย</h1>
+      <h1>Discipline</h1>
       <div class="muted" style="margin-bottom:20px">เข้าสู่ระบบด้วยบัญชีครอบครัว<br>ทำครั้งเดียวต่อเครื่อง</div>
       <div class="card" style="text-align:left">
         <label>อีเมล</label><input type="email" id="em" autocomplete="username">
