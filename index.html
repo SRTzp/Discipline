@@ -609,6 +609,9 @@ function askPin(who){
     view.kidId = who; view.screen='kid'; view.tab='chores'; render(); return;
   }
   view.screen='pin'; view.pinFor=who; view.pinBuf=''; render();
+  // ตั้ง Face ID ไว้แล้ว → เด้งสแกนทันทีเลย ไม่ต้องกดปุ่มอีกที
+  // (ต้องเรียกในจังหวะเดียวกับที่ผู้ใช้กด ไม่งั้นเบราว์เซอร์จะบล็อก)
+  if(who === 'parent' && faceIdReady()) faceIdUnlock();
 }
 function viewPin(){
   const isParent = view.pinFor === 'parent';
@@ -623,7 +626,7 @@ function viewPin(){
       <div class="muted">ใส่รหัส 4 หลัก</div></div>
     ${isParent && faceIdReady() ? `<div style="max-width:280px;margin:14px auto 0">
       <button class="btn-primary btn-full" style="font-size:17px;padding:14px"
-        onclick="faceIdUnlock()">🙂 ปลดล็อกด้วย Face ID</button>
+        onclick="faceIdUnlock()">🙂 สแกนอีกครั้ง</button>
       <div class="muted" style="text-align:center;margin-top:10px">หรือใส่รหัส 4 หลัก</div></div>` : ''}
     <div class="dots">${dots}</div>
     <div class="pinpad">${keys}
@@ -1339,7 +1342,7 @@ function parentManage(){
           : faceIdReady() ? `<button class="btn-sm btn-warn" onclick="faceIdRemove()">ปิด</button>`
           : `<button class="btn-sm btn-primary" onclick="faceIdSetup()">เปิดใช้</button>`}
       </div>
-      <div class="muted" style="margin-top:8px">ตั้งแยกแต่ละเครื่อง · รหัส 4 หลักยังใช้ได้เสมอเผื่อ Face ID ไม่ผ่าน</div>
+      <div class="muted" style="margin-top:8px">เปิดแล้วจะเด้งสแกนให้เองตอนกด "โหมดผู้ปกครอง" · ตั้งแยกแต่ละเครื่อง · รหัส 4 หลักยังใช้ได้เสมอ</div>
       <button class="btn-sm btn-warn btn-full" style="margin-top:12px" onclick="doSignOut()">ออกจากระบบเครื่องนี้</button>
       <div class="muted" style="margin-top:10px">ข้อมูลอยู่ใน Firebase ของคุณเอง · ทุกเครื่องเห็นตรงกันทันที</div></div>`;
 }
