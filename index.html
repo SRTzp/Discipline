@@ -67,6 +67,11 @@
   .btn-done{min-width:96px;font-size:17px;padding:13px 14px;font-weight:800}
   .state{font-size:26px;width:40px;text-align:center;flex:0 0 auto}
   .bignum{font-variant-numeric:tabular-nums;font-weight:800}
+  .cnt{background:var(--warn);color:#fff;border-radius:999px;padding:2px 10px;
+    font-size:14px;font-weight:800;margin-left:6px;display:inline-block}
+  .newdot{width:9px;height:9px;border-radius:50%;background:var(--warn);display:inline-block;flex:0 0 auto}
+  .feed-line{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:14px}
+  .feed-line:last-child{border-bottom:none}
   .strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
   .chip{width:48px;height:56px;border-radius:13px;background:var(--bg);display:flex;
     flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:23px;line-height:1}
@@ -584,6 +589,37 @@ function render(){
   else if(view.screen === 'parent') app.innerHTML = viewParent();
   renderModal();
 }
+/* กิจกรรมล่าสุดของลูก ๆ วันนี้ — พ่อแม่เห็นจากหน้าหลักได้เลย */
+function homeFeed(){
+  const t = todayStr(), seen = lastSeen();
+  const items = S.pending
+    .map(p => ({ts:p.ts, kidId:p.kidId, emo:p.emo, name:p.name, wait:true,
+                tag: p.type==='chore' ? '+'+p.pts : '−'+p.pts, pot:p.pot||'daily'}))
+    .concat(S.log.filter(l => dstr(l.ts) === t && l.kind !== 'adjust')
+      .map(l => ({ts:l.ts, kidId:l.kidId, emo:l.emo, name:l.name, wait:false,
+                  tag:(l.delta>=0?'+':'')+l.delta, pot:l.pot||'daily'})))
+    .sort((a,b) => b.ts - a.ts).slice(0, 5);
+  if(!items.length) return '';
+  const nNew = items.filter(i => i.ts > seen).length;
+  return `<div class="card" style="margin-top:18px">
+    <div class="row-between" style="margin-bottom:4px">
+      <span class="sec-title" style="margin:0">🔔 ล่าสุดวันนี้</span>
+      ${nNew ? `<span class="cnt" style="margin:0">${nNew} ใหม่</span>` : ''}
+    </div>
+    ${items.map(i => {
+      const k = kidById(i.kidId) || {name:'?', emo:'❓', color:'#999', photo:''};
+      const cls = i.wait ? 'tag-wait' : i.pot === 'extra' ? 'tag-cost' : 'tag-plus';
+      return `<div class="feed-line">
+        ${i.ts > seen ? '<span class="newdot"></span>' : '<span style="width:9px;flex:0 0 auto"></span>'}
+        ${avatar(k, 30)}
+        <span style="font-size:19px">${i.emo}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}
+          <span class="muted bignum" style="display:block">${fmtClock(i.ts)}${i.wait?' · รอตรวจ':''}</span></span>
+        <span class="tag ${cls}">${i.pot === 'extra' ? '💎 ' : ''}${i.tag}</span>
+      </div>`;
+    }).join('')}</div>`;
+}
+
 function viewPick(){
   const tiles = S.kids.map(k => {
     const pr = routineProgress(k.id);
@@ -601,8 +637,10 @@ function viewPick(){
       <h1 style="margin-top:6px">Discipline</h1>
       <div class="muted">ทำครบ ตรงเวลา ได้รางวัล</div></div>
     <div class="grid">${tiles || '<div class="empty">ยังไม่มีเด็ก — เข้าโหมดผู้ปกครองเพื่อเพิ่ม</div>'}</div>
-    <div style="text-align:center;margin-top:24px">
-      <button class="btn-ghost" onclick="askPin('parent')">🔐 โหมดผู้ปกครอง</button></div>`;
+    ${homeFeed()}
+    <div style="text-align:center;margin-top:20px">
+      <button class="${S.pending.length ? 'btn-primary' : 'btn-ghost'}" onclick="askPin('parent')">
+        🔐 โหมดผู้ปกครอง${S.pending.length ? `<span class="cnt">${S.pending.length} รอตรวจ</span>` : ''}</button></div>`;
 }
 function askPin(who){
   if(who !== 'parent' && !cfg().requireKidPin){
@@ -643,7 +681,7 @@ function pinDel(){ view.pinBuf = view.pinBuf.slice(0,-1); render(); }
 function pinCheck(){
   const target = view.pinFor === 'parent' ? String(cfg().parentPin) : String((kidById(view.pinFor)||{}).pin);
   if(view.pinBuf === target){
-    if(view.pinFor === 'parent'){ view.screen='parent'; view.tab='review'; }
+    if(view.pinFor === 'parent'){ markSeen(); view.screen='parent'; view.tab='review'; }
     else { view.kidId = view.pinFor; view.screen='kid'; view.tab='chores'; }
   }else toast('รหัสไม่ถูกต้อง');
   view.pinBuf=''; render();
@@ -1828,6 +1866,10 @@ async function doSignIn(){
    Face ID / Touch ID แทนรหัสผู้ปกครอง (WebAuthn)
    ผูกกับ "เครื่องนี้" เท่านั้น — แต่ละเครื่องต้องตั้งเอง และรหัส 4 หลักยังใช้ได้เสมอ
    ============================================================ */
+const SEEN_KEY = 'discipline.seen';
+const lastSeen = () => Number(localStorage.getItem(SEEN_KEY) || 0);
+function markSeen(){ try{ localStorage.setItem(SEEN_KEY, String(now())); }catch(e){} }
+
 const FID_KEY = 'discipline.faceid';
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)))
   .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -1871,6 +1913,7 @@ async function faceIdUnlock(){
       allowCredentials: [{type:'public-key', id: unb64(localStorage.getItem(FID_KEY))}],
       userVerification:'required', timeout: 60000
     }});
+    markSeen();
     view.screen='parent'; view.tab='review'; view.pinBuf=''; render();   // ผ่านการยืนยันตัวตนของเครื่องแล้ว
   }catch(e){
     if(e && e.name === 'NotAllowedError') toast('ยกเลิก หรือไม่ผ่าน — ใช้รหัส 4 หลักแทนได้');
