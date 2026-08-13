@@ -249,17 +249,17 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
                       autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60,
-                      rewardsV4:true, parentPin:'1234'};
+                      rewardsV4:true, eveningV1:true, parentPin:'1234'};
 const mkChore = c => Object.assign(
   {id:uid(), once:true, from:'', due:'', grace:10, latePct:50, routine:true, by:'kid',
-   extra:false, all:false, days:ALLDAYS.slice()}, c);
+   extra:false, all:false, chain:true, days:ALLDAYS.slice()}, c);
 /* กิจวัตรหลัก รวมกันต้องได้ 100 แต้มพอดี = คะแนนเต็มของวัน (ใช้ซื้อรางวัลเล็ก)
    เรียงแต้มตามลำดับความสำคัญ แต่ไม่ให้ห่างกันมาก (20 → 10) */
 const DEF_CHORES = [
   mkChore({name:'ถึงโรงเรียนตรงเวลา',    emo:'🏫', pts:20, due:'08:00', days:WEEKDAYS, by:'parent'}),
-  mkChore({name:'ทำการบ้านเสร็จภายใน 1 ชม.', emo:'✏️', pts:18, from:'17:30', due:'18:30', days:WEEKDAYS}),
-  mkChore({name:'เก็บกระเป๋าพร้อมพรุ่งนี้', emo:'🎒', pts:16, from:'18:30', due:'20:45', days:WEEKDAYS}),
-  mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:14, from:'18:30', due:'20:50', days:WEEKDAYS}),
+  mkChore({name:'ทำการบ้านเสร็จ',         emo:'✏️', pts:18, from:'17:00', due:'20:00', days:WEEKDAYS, chain:false}),
+  mkChore({name:'เก็บกระเป๋าพร้อมพรุ่งนี้', emo:'🎒', pts:16, from:'17:00', due:'20:00', days:WEEKDAYS, chain:false}),
+  mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:14, from:'17:00', due:'20:00', days:WEEKDAYS, chain:false}),
   mkChore({name:'ตื่นนอน ลุกจากเตียง',    emo:'⏰', pts:12, from:'05:00', due:'06:40', days:WEEKDAYS}),
   mkChore({name:'อาบน้ำเสร็จ',            emo:'🚿', pts:10, from:'06:00', due:'07:00', days:WEEKDAYS}),
   mkChore({name:'กินข้าวเช้าเสร็จ',        emo:'🍳', pts:10, from:'06:30', due:'07:25', days:WEEKDAYS}),
@@ -432,10 +432,10 @@ const STATUS_TXT = {ontime:'ทันเวลา', late:'สายนิดห�
 const STATUS_COL = {ontime:'var(--good)', late:'var(--gold)', toolate:'var(--warn)'};
 const windowOpen = c => !c.from || now() >= dueDateOf(c.from).getTime();
 const dueKey = c => c.due || '99:99';
-const chainToday = () => S.chores.filter(c => c.routine && c.by==='kid' && appliesOn(c))
+const chainToday = () => S.chores.filter(c => c.routine && c.by==='kid' && c.chain !== false && appliesOn(c))
   .sort((a,b) => dueKey(a) < dueKey(b) ? -1 : dueKey(a) > dueKey(b) ? 1 : 0);
 function blockedBy(c, kidId){
-  if(!cfg().stepOrder || !c.routine || c.by !== 'kid') return null;
+  if(!cfg().stepOrder || !c.routine || c.by !== 'kid' || c.chain === false) return null;
   const list = chainToday();
   const idx = list.findIndex(x => x.id === c.id);
   if(idx <= 0) return null;
@@ -1254,7 +1254,8 @@ function parentManage(){
     <div class="item"><div class="emo">${c.emo}</div>
       <div class="txt"><b>${esc(c.name)}</b><span class="muted">${
         (c.from ? c.from+'–' : '') + (c.due ? (c.from?'':'ก่อน ')+c.due+' · ' : '') + daysLabel(c) +
-        (c.all ? ' · ให้ทั้งบ้าน' : c.by==='parent' ? ' · พ่อแม่กด' : '')}</span></div>
+        (c.all ? ' · ให้ทั้งบ้าน' : c.by==='parent' ? ' · พ่อแม่กด' : '') +
+        (c.routine && c.by!=='parent' && c.chain===false ? ' · ลำดับอิสระ' : '')}</span></div>
       <span class="tag tag-plus">+${c.pts}</span>
       <button class="btn-sm" onclick="editItem('chores','${c.id}')">แก้ไข</button>
       <button class="btn-sm btn-warn" onclick="delItem('chores','${c.id}')">ลบ</button></div>`;
@@ -1621,6 +1622,8 @@ function editItem(list, id){
          onText:'ลูกกดเอง', offText:'พ่อแม่กดให้'},
         {key:'all', label:'ให้แต้มทุกคนพร้อมกันไหม (พ่อแม่กดครั้งเดียว)', type:'switch', value:x?!!x.all:false,
          onText:'ให้ทั้งบ้าน', offText:'ให้ทีละคน'},
+        {key:'chain', label:'ต้องทำตามลำดับไหม', type:'switch', value:x?(x.chain!==false):true,
+         onText:'ต้องทำตามคิว', offText:'ทำก่อน–หลังได้อิสระ'},
         {key:'grace', label:'สายได้ไม่เกินกี่นาที (ยังได้แต้มบางส่วน)', type:'number', value:x?(x.grace||10):10},
         {key:'latePct', label:'สายแล้วได้กี่ % ของแต้มเต็ม', type:'number', value:x?(x.latePct||50):50},
         {key:'once', label:'ทำได้บ่อยแค่ไหน', type:'switch', value:x?!!x.once:true,
@@ -1638,7 +1641,7 @@ function editItem(list, id){
           from: from ? from.padStart(5,'0') : '', due: due ? due.padStart(5,'0') : '',
           days: Array.isArray(v.days)&&v.days.length ? v.days : ALLDAYS.slice(),
           routine: !!v.routine, by: (v.all || !v.by) ? 'parent' : 'kid',
-          extra: !v.routine, all: !!v.all,
+          extra: !v.routine, all: !!v.all, chain: !!v.chain,
           grace: isNaN(g)||g<0 ? 10 : g, latePct: isNaN(lp)||lp<0||lp>100 ? 50 : lp};
         base.once = base.due ? true : !!v.once;
         try{
@@ -1742,6 +1745,22 @@ async function seedOrMigrate(){
   const cur = {};
   setSnap.docs.forEach(d => { if(d.id === 'settings') Object.assign(cur, d.data()); });
 
+  if(cur.rewardsV4 && !cur.eveningV1){   // งานช่วงเย็น 3 อย่าง → 17:00–20:00 ทำอันไหนก่อนก็ได้
+    const b = writeBatch(db);
+    const free = {'ทำการบ้านเสร็จ':1, 'ทำการบ้านเสร็จภายใน 1 ชม.':1,
+                  'เก็บกระเป๋าพร้อมพรุ่งนี้':1, 'เตรียมชุดวันพรุ่งนี้':1};
+    chores.docs.forEach(d => {
+      const o = d.data(), u = {};
+      if(o.chain === undefined) u.chain = true;
+      if(free[o.name]){
+        u.chain = false; u.from = '17:00'; u.due = '20:00';
+        if(o.name.indexOf('ภายใน 1 ชม.') >= 0) u.name = 'ทำการบ้านเสร็จ';
+      }
+      if(Object.keys(u).length) b.update(dref('chores', d.id), u);
+    });
+    b.update(settingsRef(), {eveningV1:true});
+    await b.commit();
+  }
   if(!cur.rewardsV4){        // แยก 2 กระเป๋าแต้ม + จัดลำดับความสำคัญของแต้มใหม่
     const b = writeBatch(db);
     (await getDocs(col('rewards'))).docs.forEach(d => b.delete(dref('rewards', d.id)));
@@ -1772,7 +1791,7 @@ async function seedOrMigrate(){
       if(f) b.set(dref('penalties', f.id), f);
     }
     b.set(settingsRef(), Object.assign({}, DEF_SETTINGS, cur,
-      {rewardsV4:true, rewardsV3:true, rewardsV2:true, extrasV1:true, perfectBonus:20}));
+      {rewardsV4:true, rewardsV3:true, rewardsV2:true, extrasV1:true, eveningV1:true, perfectBonus:20}));
     await b.commit();
   }
 }
