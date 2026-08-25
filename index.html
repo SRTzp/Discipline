@@ -276,7 +276,7 @@ const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, p
                             ใครถอนก่อนกำหนด อีกคนก็อดโบนัสไปด้วย
                          3) พี่น้องเอาแต้มมาค้ำ 50% ของยอดยืม → ดอกยืมลดครึ่ง
                             แต่เลยกำหนดเมื่อไหร่ หลักประกันโดนยึดปิดหนี้ทันที */
-                      arbV1:true, fridayV1:true, morningV1:true, loanGraceDays:3, loanPerWeek:1,
+                      arbV1:true, fridayV1:true, morningV1:true, morningV2:true, loanGraceDays:3, loanPerWeek:1,
                       coDepBonusPct:2, coDepBonusMax:5, coDepMinDays:14,
                       cosignOn:true, cosignPct:50, cosignDiscount:50};
 const mkChore = c => Object.assign(
@@ -295,10 +295,9 @@ const DEF_CHORES = [
   mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:14, from:'17:00', due:'20:00', days:SCHOOLNIGHT, chain:false}),
   mkChore({name:'ตื่นนอน ลุกจากเตียง',    emo:'⏰', pts:12, from:'05:00', due:'06:40', days:WEEKDAYS}),
   mkChore({name:'กินข้าวเช้าเสร็จ',        emo:'🍳', pts:10, from:'06:30', due:'07:25', days:WEEKDAYS}),
-  /* ---- ชุดเช้า 3 อย่าง → 06:00–07:15 ทำอันไหนก่อนก็ได้ (chain:false) รวมกัน 10 แต้มเท่าเดิม ---- */
-  mkChore({name:'อาบน้ำเสร็จ',            emo:'🚿', pts:4, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
+  /* ---- ชุดเช้า → เสร็จก่อน 07:15 ทำอันไหนก่อนก็ได้ (chain:false) รวมกัน 10 แต้มเท่าเดิม ---- */
+  mkChore({name:'อาบน้ำแต่งตัวเสร็จ',      emo:'🚿', pts:7, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
   mkChore({name:'แปรงฟัน',                emo:'🪥', pts:3, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
-  mkChore({name:'แต่งตัวเรียบร้อย',        emo:'👔', pts:3, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
   /* ---- งานเสริม → เข้ากระเป๋า "แต้มพิเศษ" สำหรับรางวัลใหญ่เท่านั้น (เรียงตามความสำคัญ) ---- */
   mkChore({name:'วันนี้ไม่ทำให้แม่ต้องเสียงดัง', emo:'🤫', pts:15,
            routine:false, extra:true, by:'parent', all:true}),
@@ -2753,6 +2752,26 @@ async function seedOrMigrate(){
       b.set(dref('chores', c.id), Object.assign({carryDay:'', carryPct:100}, c));
     });
     b.update(settingsRef(), {morningV1:true});
+    await b.commit();
+  }
+  if(!cur.morningV2){         // รวมอาบน้ำ + แต่งตัว เป็นงานเดียว 7 แต้ม (เหลือชุดเช้า 2 อย่าง = 7+3)
+    const cs = await getDocs(col('chores'));
+    const b = writeBatch(db);
+    let merged = false;
+    cs.docs.forEach(d => {
+      const n = String(d.data().name||'').trim();
+      if(n === 'อาบน้ำเสร็จ' || n === 'อาบน้ำแต่งตัวเสร็จ'){
+        b.update(dref('chores', d.id),
+          {name:'อาบน้ำแต่งตัวเสร็จ', emo:'🚿', pts:7, from:'06:00', due:'07:15', chain:false});
+        merged = true;
+      }else if(n === 'แต่งตัวเรียบร้อย') b.delete(dref('chores', d.id));
+    });
+    if(!merged){                              // เผื่อโดนลบไปแล้ว — สร้างใหม่ให้ครบ 100
+      const c = mkChore({name:'อาบน้ำแต่งตัวเสร็จ', emo:'🚿', pts:7, from:'06:00', due:'07:15',
+                         days:WEEKDAYS.slice(), chain:false});
+      b.set(dref('chores', c.id), Object.assign({carryDay:'', carryPct:100}, c));
+    }
+    b.update(settingsRef(), {morningV2:true});
     await b.commit();
   }
   if(!cur.fridayV1){          // ศุกร์เย็นไม่ต้องเตรียมของ → ยกไปทำวันอาทิตย์แทน
