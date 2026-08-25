@@ -276,7 +276,7 @@ const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, p
                             ใครถอนก่อนกำหนด อีกคนก็อดโบนัสไปด้วย
                          3) พี่น้องเอาแต้มมาค้ำ 50% ของยอดยืม → ดอกยืมลดครึ่ง
                             แต่เลยกำหนดเมื่อไหร่ หลักประกันโดนยึดปิดหนี้ทันที */
-                      arbV1:true, fridayV1:true, loanGraceDays:3, loanPerWeek:1,
+                      arbV1:true, fridayV1:true, morningV1:true, loanGraceDays:3, loanPerWeek:1,
                       coDepBonusPct:2, coDepBonusMax:5, coDepMinDays:14,
                       cosignOn:true, cosignPct:50, cosignDiscount:50};
 const mkChore = c => Object.assign(
@@ -294,8 +294,11 @@ const DEF_CHORES = [
   mkChore({name:'เก็บกระเป๋าพร้อมพรุ่งนี้', emo:'🎒', pts:16, from:'17:00', due:'20:00', days:SCHOOLNIGHT, chain:false}),
   mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:14, from:'17:00', due:'20:00', days:SCHOOLNIGHT, chain:false}),
   mkChore({name:'ตื่นนอน ลุกจากเตียง',    emo:'⏰', pts:12, from:'05:00', due:'06:40', days:WEEKDAYS}),
-  mkChore({name:'อาบน้ำเสร็จ',            emo:'🚿', pts:10, from:'06:00', due:'07:00', days:WEEKDAYS}),
   mkChore({name:'กินข้าวเช้าเสร็จ',        emo:'🍳', pts:10, from:'06:30', due:'07:25', days:WEEKDAYS}),
+  /* ---- ชุดเช้า 3 อย่าง → 06:00–07:15 ทำอันไหนก่อนก็ได้ (chain:false) รวมกัน 10 แต้มเท่าเดิม ---- */
+  mkChore({name:'อาบน้ำเสร็จ',            emo:'🚿', pts:4, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
+  mkChore({name:'แปรงฟัน',                emo:'🪥', pts:3, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
+  mkChore({name:'แต่งตัวเรียบร้อย',        emo:'👔', pts:3, from:'06:00', due:'07:15', days:WEEKDAYS, chain:false}),
   /* ---- งานเสริม → เข้ากระเป๋า "แต้มพิเศษ" สำหรับรางวัลใหญ่เท่านั้น (เรียงตามความสำคัญ) ---- */
   mkChore({name:'วันนี้ไม่ทำให้แม่ต้องเสียงดัง', emo:'🤫', pts:15,
            routine:false, extra:true, by:'parent', all:true}),
@@ -2351,7 +2354,7 @@ function renderModal(){
             สีพื้นหลังทั้งหน้าจอจะเป็นแบบนี้</div></div>`;
     }
     if(fd.type === 'emoji'){
-      const emos = ['✨','⏰','🚿','👕','🍳','🎒','🚗','🏫','🛏️','✏️','♟️','📚','🧹','🍽️','🧸','🪴','🛁','🎮','🕹️','📺','🍦','🍜','🍿','💰','🌙','🎡','🎁','⚠️','😤','⚡','📕','🧺','📢'];
+      const emos = ['✨','⏰','🚿','🪥','👔','👕','🍳','🎒','🚗','🏫','🛏️','✏️','♟️','📚','🧹','🍽️','🧸','🪴','🛁','🎮','🕹️','📺','🍦','🍜','🍿','💰','🌙','🎡','🎁','⚠️','😤','⚡','📕','🧺','📢'];
       return `<label>${fd.label}</label><div class="emoji-pick">${emos.map(e =>
         `<button class="${v===e?'on':''}" onclick="setVal('${fd.key}','${e}')">${e}</button>`).join('')}</div>`;
     }
@@ -2732,6 +2735,25 @@ async function seedOrMigrate(){
       loanCap:340, loanPct:10, loanDays:14, loanLatePct:2, loanMaxPct:30, loanRepayPct:50,
       depDaily:'3:2,7:5,14:12', depCapDaily:200,
       depExtra:'7:2,14:6,30:15', depCapExtra:400});
+  }
+  if(!cur.morningV1){         // ชุดเช้า: อาบน้ำ 10 → แยกเป็น อาบน้ำ 4 + แปรงฟัน 3 + แต่งตัว 3 (รวมเท่าเดิม)
+    const cs = await getDocs(col('chores'));
+    const byName = {}; cs.docs.forEach(d => { byName[String(d.data().name||'').trim()] = d; });
+    const b = writeBatch(db);
+    const bath = byName['อาบน้ำเสร็จ'];
+    if(bath) b.update(dref('chores', bath.id),
+      {pts:4, from:'06:00', due:'07:15', chain:false, days:WEEKDAYS.slice()});
+    [['แปรงฟัน','🪥'], ['แต่งตัวเรียบร้อย','👔']].forEach(([nm, em]) => {
+      if(byName[nm]) return;                       // มีอยู่แล้ว (หรือพ่อแม่เพิ่มเอง) ไม่ทับ
+      const src = bath ? bath.data() : {};
+      const c = mkChore({name:nm, emo:em, pts:3, from:'06:00', due:'07:15',
+                         days:WEEKDAYS.slice(), chain:false,
+                         grace: src.grace===undefined?10:src.grace,
+                         latePct: src.latePct===undefined?50:src.latePct});
+      b.set(dref('chores', c.id), Object.assign({carryDay:'', carryPct:100}, c));
+    });
+    b.update(settingsRef(), {morningV1:true});
+    await b.commit();
   }
   if(!cur.fridayV1){          // ศุกร์เย็นไม่ต้องเตรียมของ → ยกไปทำวันอาทิตย์แทน
     const b = writeBatch(db);
