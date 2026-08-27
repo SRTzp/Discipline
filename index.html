@@ -112,6 +112,42 @@
   .prog{height:12px;border-radius:99px;background:var(--line);overflow:hidden;margin:8px 0 4px}
   .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--good),var(--gold));transition:width .4s}
   .dayrow{display:flex;gap:4px;margin-top:6px}
+  /* ---------- ⌛ นาฬิกาทรายนับถอยหลังของแต่ละงาน ----------
+     ทรายไหลด้วย CSS animation ล้วน ๆ + animation-delay ติดลบ = วาดใหม่กี่ครั้งก็ยังตรงเวลาจริง
+     JS แตะแค่ตัวเลขนาที ไม่ต้อง re-render ทั้งหน้า จะได้ไม่กระตุก */
+  .cd{display:flex;align-items:center;gap:9px;margin:8px 0 2px;padding:7px 10px;border-radius:13px;
+      background:var(--bg);border:2px solid var(--line)}
+  .cd svg{width:26px;height:36px;flex:none}
+  .cd .glass{fill:none;stroke:var(--muted);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+  .cd .sand{fill:var(--muted)}
+  .cd .s-top{transform-box:view-box;transform-origin:20px 27px;animation:hgTop linear forwards}
+  .cd .s-bot{transform-box:view-box;transform-origin:20px 49px;animation:hgBot linear forwards}
+  .cd .drip{fill:var(--muted);animation:hgDrip .9s linear infinite}
+  @keyframes hgTop{from{transform:scaleY(1)}to{transform:scaleY(0)}}
+  @keyframes hgBot{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+  @keyframes hgDrip{0%{opacity:0;transform:translateY(-3px)}30%{opacity:1}100%{opacity:0;transform:translateY(5px)}}
+  .cd-num{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .cd-lab{font-size:13px;font-weight:700;color:var(--muted);line-height:1.25}
+  .cd-lab small{display:block;font-size:11px;font-weight:600;opacity:.75}
+  /* ปกติ = เขียวใจเย็น */
+  .cd.ok{border-color:var(--good)55;background:var(--good-soft)}
+  .cd.ok .glass,.cd.ok .sand,.cd.ok .drip{stroke:var(--good);fill:var(--good)}
+  .cd.ok .glass{fill:none}
+  .cd.ok .cd-num,.cd.ok .cd-lab{color:var(--good)}
+  /* ใกล้หมดเวลา = เหลือง เต้นช้า ๆ */
+  .cd.warn{border-color:var(--gold);background:var(--gold-soft);animation:cdPulse 1.6s ease-in-out infinite}
+  .cd.warn .glass,.cd.warn .sand,.cd.warn .drip{stroke:var(--gold);fill:var(--gold)}
+  .cd.warn .glass{fill:none}
+  .cd.warn .cd-num,.cd.warn .cd-lab{color:var(--gold)}
+  /* ด่วนมาก / เลยเวลา = แดง เต้นเร็ว */
+  .cd.hot{border-color:var(--warn);background:var(--warn-soft);animation:cdPulse .8s ease-in-out infinite}
+  .cd.hot .glass,.cd.hot .sand,.cd.hot .drip{stroke:var(--warn);fill:var(--warn)}
+  .cd.hot .glass{fill:none}
+  .cd.hot .cd-num,.cd.hot .cd-lab{color:var(--warn)}
+  @keyframes cdPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.025)}}
+  @media (prefers-reduced-motion:reduce){
+    .cd.warn,.cd.hot{animation:none} .cd .drip{animation:none;opacity:.6}
+  }
   .daybox{flex:1;text-align:center;font-size:10px;color:var(--muted)}
   .daybox b{display:block;height:22px;border-radius:7px;line-height:22px;font-size:11px;color:#fff;margin-bottom:2px}
   .daypick{display:flex;gap:5px;margin-top:6px}
@@ -276,7 +312,7 @@ const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, p
                             ใครถอนก่อนกำหนด อีกคนก็อดโบนัสไปด้วย
                          3) พี่น้องเอาแต้มมาค้ำ 50% ของยอดยืม → ดอกยืมลดครึ่ง
                             แต่เลยกำหนดเมื่อไหร่ หลักประกันโดนยึดปิดหนี้ทันที */
-                      arbV1:true, fridayV1:true, morningV1:true, morningV2:true, morningV3:true, loanGraceDays:3, loanPerWeek:1,
+                      arbV1:true, fridayV1:true, morningV1:true, morningV2:true, morningV3:true, urgentMin:15, loanGraceDays:3, loanPerWeek:1,
                       coDepBonusPct:2, coDepBonusMax:5, coDepMinDays:14,
                       cosignOn:true, cosignPct:50, cosignDiscount:50};
 const mkChore = c => Object.assign(
@@ -931,6 +967,68 @@ function taskStrip(kidId){
 
 /* แถวงาน — ออกแบบให้เด็กที่ยังอ่านไม่ออกดูรู้เรื่อง
    ใช้ ไอคอนใหญ่ + สีขอบ + ตัวเลขเวลา แทนประโยคยาว ๆ */
+/* ---------- ⌛ นาฬิกาทรายนับถอยหลัง ----------
+   ทรายไหลจริงตามเวลาที่เหลือ · 15 นาทีสุดท้ายเปลี่ยนเป็นโหมดด่วน · หมดเวลาแล้วนับสายขึ้นเรื่อย ๆ */
+const urgentMin = () => Number(cfg().urgentMin === undefined ? 15 : cfg().urgentMin);
+function cdStage(leftMin){
+  if(leftMin <= 0) return 'hot';
+  if(leftMin <= 5) return 'hot';
+  return leftMin <= urgentMin() ? 'warn' : 'ok';
+}
+function cdText(leftMin, lateMin, pts){
+  if(leftMin > 0) return {num:leftMin, lab:`นาที<small>เหลือเวลา</small>`};
+  return {num:lateMin, lab:`นาที<small>สายแล้ว${pts>0?` · ได้ ${pts} แต้ม`:' · หมดเวลา'}</small>`};
+}
+function countdown(c){
+  if(!c.due) return '';
+  const due = dueDateOf(c.due).getTime();
+  const start = c.from ? dueDateOf(c.from).getTime() : due - 60*60000;   // ไม่มีเวลาเริ่ม → ถือว่า 1 ชม.
+  const span = Math.max(60000, due - start);
+  const elapsed = Math.min(span, Math.max(0, now() - start));
+  const leftMin = Math.ceil((due - now())/60000);
+  const t = evalTiming(c);
+  const running = leftMin > 0;
+  const secs = Math.round(span/1000), delay = Math.round(elapsed/1000);
+  const anim = running
+    ? `animation-duration:${secs}s;animation-delay:-${delay}s`
+    : 'animation:none';
+  const txt = cdText(leftMin, t.lateMin, t.pts);
+  return `<div class="cd ${cdStage(leftMin)}" data-due="${due}"
+    data-grace="${Number(c.grace||10)}" data-lp="${Math.max(1, Math.round(Number(ptsToday(c))*Number(c.latePct||50)/100))}">
+    <svg viewBox="0 0 40 56" aria-hidden="true">
+      <path class="glass" d="M9 4h22M9 52h22M11 5v7l9 16 -9 16v7M29 5v7l-9 16 9 16v7"/>
+      <polygon class="sand s-top" points="12,8 28,8 20,26" style="${running?anim:'transform:scaleY(0)'}"/>
+      <polygon class="sand s-bot" points="12,49 28,49 20,32" style="${running?anim:'transform:scaleY(1)'}"/>
+      ${running ? `<circle class="drip" cx="20" cy="30" r="1.6"/>` : ''}
+    </svg>
+    <span class="cd-num">${txt.num}</span>
+    <span class="cd-lab">${txt.lab}</span>
+    <span style="flex:1"></span>
+    <span class="cd-lab" style="text-align:right">ถึง<small>${c.due} น.</small></span>
+  </div>`;
+}
+/* เดินตัวเลขทุกวินาทีแบบแตะเฉพาะจุด — ไม่ re-render ทั้งหน้า (ทรายไหลเองด้วย CSS อยู่แล้ว) */
+function tickCountdowns(){
+  const t = Date.now();
+  document.querySelectorAll('.cd[data-due]').forEach(el => {
+    const due = Number(el.getAttribute('data-due'));
+    const leftMin = Math.ceil((due - t)/60000);
+    const lateMin = Math.max(0, Math.round((t - due)/60000));
+    const num = el.querySelector('.cd-num'), lab = el.querySelector('.cd-lab');
+    if(!num || !lab) return;
+    const g = Number(el.getAttribute('data-grace')||0);
+    const pts = lateMin <= g ? Number(el.getAttribute('data-lp')||0) : 0;
+    const txt = cdText(leftMin, lateMin, pts);
+    num.textContent = txt.num;
+    if(lab.innerHTML !== txt.lab) lab.innerHTML = txt.lab;
+    const stage = cdStage(leftMin);
+    if(!el.classList.contains(stage)){
+      el.classList.remove('ok','warn','hot'); el.classList.add(stage);
+    }
+  });
+}
+setInterval(tickCountdowns, 1000);
+
 function choreRow(c, kidId){
   const st = choreState(c, kidId);          // ใช้ตัวเดียวกับแถบติดตาม จะได้ไม่มีทางขัดกัน
   const used = st === 'done';
@@ -972,12 +1070,15 @@ function choreRow(c, kidId){
     btn = `<button class="btn-good btn-done" onclick="doChore('${c.id}')">✓ Done</button>`;
   }
   const shownPts = (!used && c.due) ? t.pts : Number(c.pts);
-  return `<div class="item ${cls}">
+  // โชว์นาฬิกาทรายเฉพาะงานที่ "กดได้ตอนนี้" และมีเส้นตาย — งานที่ทำแล้ว/ยังไม่ถึงเวลา/ล็อกคิว ไม่ต้องรก
+  const timer = (!used && !early && !prev && c.by !== 'parent' && c.due) ? countdown(c) : '';
+  return `<div class="item ${cls}" style="${timer?'flex-wrap:wrap':''}">
     <div class="emo">${c.emo}</div>
     <div class="txt"><b>${esc(c.name)}</b><span class="muted">${sub}</span></div>
     <span class="state">${state}</span>
     <span class="tag ${shownPts>0?'tag-plus':'tag-minus'}">+${shownPts}</span>
-    ${btn}</div>`;
+    ${btn}
+    ${timer ? `<div style="flex-basis:100%">${timer}</div>` : ''}</div>`;
 }
 function todayCard(k){
   const pr = routineProgress(k.id);
@@ -2019,6 +2120,11 @@ function parentManage(){
         ? 'กันเครื่องค้างอยู่ในบัญชีของคนก่อนหน้า (โหมดผู้ปกครองให้เวลานานกว่า 3 เท่า)'
         : 'เครื่องจะค้างอยู่หน้าเดิมจนกว่าจะมีคนกดออก'}</div>
       <div class="row-between" style="margin-top:16px">
+        <span>⌛ นาฬิกาทราย เข้าโหมดด่วนเมื่อเหลือ</span>
+        <button class="btn-sm" onclick="editUrgentMin()">${c.urgentMin===undefined?15:c.urgentMin} นาที</button></div>
+      <div class="muted" style="margin-top:8px">ทุกงานที่มีเส้นตายจะมีนาฬิกาทรายไหลลงให้เห็น
+        · เหลือน้อยกว่านี้เปลี่ยนเป็นสีเหลืองเต้น ๆ · เหลือ 5 นาทีหรือเลยเวลาแล้วเป็นสีแดง (ใส่ 0 = ปิดโหมดด่วน)</div>
+      <div class="row-between" style="margin-top:16px">
         <span>โบนัสตรงเวลาครบทั้งวัน</span>
         <button class="btn-sm" onclick="editBonus()">${c.perfectBonus ? '+'+c.perfectBonus+' แต้ม' : 'ปิดอยู่'}</button></div>
       <div class="row-between" style="margin-top:12px">
@@ -2210,6 +2316,16 @@ function editGiveCap(){
   openForm({title:'แบ่งแต้มให้พี่น้องได้วันละกี่แต้ม',
     fields:[{key:'n', label:'แต้มต่อคนต่อวัน (0 = ไม่จำกัด)', type:'number', value:cfg().maxGiveDay||0}],
     async onSave(v){ const n = parseInt(v.n,10); await setOpt('maxGiveDay', isNaN(n)||n<0?0:n); }});
+}
+function editUrgentMin(){
+  openForm({title:'เข้าโหมดด่วนเมื่อเหลือกี่นาที',
+    fields:[{key:'n', label:'นาที (0 = ไม่มีโหมดด่วน)', type:'number',
+             value:cfg().urgentMin===undefined?15:cfg().urgentMin}],
+    async onSave(v){
+      const n = parseInt(v.n,10);
+      if(isNaN(n) || n<0 || n>120) return 'ใส่ได้ 0 ถึง 120 นาที';
+      await setOpt('urgentMin', n);
+    }});
 }
 function editBonus(){
   openForm({title:'โบนัสตรงเวลาครบทั้งวัน',
@@ -2797,6 +2913,7 @@ async function seedOrMigrate(){
     b.update(settingsRef(), {morningV3:true});
     await b.commit();
   }
+  if(cur.urgentMin === undefined) await updateDoc(settingsRef(), {urgentMin:15});
   if(!cur.fridayV1){          // ศุกร์เย็นไม่ต้องเตรียมของ → ยกไปทำวันอาทิตย์แทน
     const b = writeBatch(db);
     (await getDocs(col('chores'))).docs.forEach(d => {
@@ -2951,7 +3068,7 @@ Object.assign(window, {
   openGive, giveForm,
   openDeposit, withdrawDep, askEarly, openLoan, payLoanAll, editBankNum, editBankTier,
   cosignWith, seizeCollateral,
-  editKid, editItem, delItem, setOpt, editBonus, editGiveCap, editAutoSec, editIdleSec,
+  editKid, editItem, delItem, setOpt, editBonus, editGiveCap, editUrgentMin, editAutoSec, editIdleSec,
   changeParentPin, doSignOut,
   stayHere, goHomeNow,
   openForm, openConfirm, confirmYes, closeModal, setVal, toggleDay, setDays,
