@@ -286,7 +286,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
                       autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60,
                       rewardsV4:true, eveningV1:true, potFixV1:true, parentPin:'1234',
-                      shareSmallV1:true, maxGiveDay:50,
+                      shareSmallV1:true, rewardsV5:true, maxGiveDay:50,
                       /* ---- 🏦 ธนาคารแต้ม ----
                          ตัวเลขชุดนี้คุมไม่ให้แต้มเฟ้อ: ดอกฝากผลิตแต้มใหม่ได้สูงสุด
                          🎈 200×10%/14วัน = 10/สัปดาห์ (2.5% ของรายได้ 400)
@@ -355,11 +355,15 @@ const DEF_PENALTIES = [
 /* รางวัลเล็ก ใช้ "แต้มประจำวัน" · รางวัลใหญ่ ใช้ "แต้มพิเศษ" เท่านั้น (share = หารกันจ่ายได้)
    limitDay / limitWeek = เพดานจำนวนครั้ง (0 = ไม่จำกัด) */
 const DEF_REWARDS = [
-  {id:uid(), name:'YouTube 30 นาที',  emo:'📺', cost:70,  big:false, share:false, limitDay:1, limitWeek:0},
-  {id:uid(), name:'เล่นเกม 30 นาที',   emo:'🎮', cost:70,  big:false, share:false, limitDay:1, limitWeek:0},
+  /* รางวัลจอทั้ง 3 อัน "หารกันได้" = ดูด้วยกัน จ่ายคนละครึ่ง → ดันให้ใช้จอเดียวกันแทนแยกจอ
+     โควตารายสัปดาห์ของ YouTube/เกม เป็นตัวคุมเวลาจอบันเทิงไม่ให้เกิน ~5 ชม./สัปดาห์
+     ส่วน Educational ตั้งใจให้ถูกสุดและไม่จำกัดรายสัปดาห์ */
+  {id:uid(), name:'Educational YouTube 30 นาที', emo:'📚', cost:40, big:false, share:true, limitDay:1, limitWeek:0},
+  {id:uid(), name:'เล่นเกม 30 นาที',   emo:'🎮', cost:50,  big:false, share:true,  limitDay:1, limitWeek:5},
+  {id:uid(), name:'YouTube 30 นาที',  emo:'📺', cost:70,  big:false, share:true,  limitDay:1, limitWeek:5},
   {id:uid(), name:'นอนดึกได้ 1 ชม.',   emo:'🌙', cost:100, big:false, share:false, limitDay:1, limitWeek:2},
-  {id:uid(), name:'เลือกเมนูข้าวเย็น', emo:'🍜', cost:120, big:false, share:true,  limitDay:1, limitWeek:3},
-  {id:uid(), name:'Swensen',          emo:'🍨', cost:150, big:false, share:true,  limitDay:1, limitWeek:3},
+  {id:uid(), name:'Swensen',          emo:'🍨', cost:140, big:false, share:true,  limitDay:1, limitWeek:2},
+  {id:uid(), name:'Dinner out ไปกินข้าวนอกบ้าน', emo:'🍽️', cost:140, big:false, share:true, limitDay:1, limitWeek:2},
 
   {id:uid(), name:'ของเล่นงบ 200 บาท',  emo:'🧸', cost:150,  big:true, share:false, limitDay:0, limitWeek:0},
   {id:uid(), name:'ของเล่นงบ 500 บาท',  emo:'🎁', cost:280,  big:true, share:false, limitDay:0, limitWeek:0},
@@ -2907,6 +2911,34 @@ async function seedOrMigrate(){
       b.set(dref('chores', c.id), Object.assign({carryDay:'', carryPct:100}, c));
     }
     b.update(settingsRef(), {morningV3:true});
+    await b.commit();
+  }
+  if(!cur.rewardsV5){        // ราคา/โควตารางวัลชุดใหม่ + เปิดหารกันให้รางวัลจอ + เพิ่ม Educational YouTube
+    const NEW = {
+      'YouTube 30 นาที':            {cost:70,  share:true,  limitDay:1, limitWeek:5},
+      'เล่นเกม 30 นาที':             {cost:50,  share:true,  limitDay:1, limitWeek:5},
+      'Swensen':                    {cost:140, share:true,  limitDay:1, limitWeek:2},
+      'Educational YouTube 30 นาที': {cost:40,  share:true,  limitDay:1, limitWeek:0}
+    };
+    const cs = await getDocs(col('rewards'));
+    const seen = {};
+    const b = writeBatch(db);
+    cs.docs.forEach(d => {
+      const o = d.data(), n = String(o.name||'').trim();
+      // ของเดิม "เลือกเมนูข้าวเย็น" → กลายเป็น Dinner out ไปกินข้าวนอกบ้าน
+      if(n === 'เลือกเมนูข้าวเย็น' || n === 'Dinner out ไปกินข้าวนอกบ้าน'){
+        seen['Dinner out ไปกินข้าวนอกบ้าน'] = true;
+        b.update(dref('rewards', d.id), {name:'Dinner out ไปกินข้าวนอกบ้าน', emo:'🍽️',
+          cost:140, share:true, limitDay:1, limitWeek:2});
+      }else if(NEW[n]){ seen[n] = true; b.update(dref('rewards', d.id), NEW[n]); }
+    });
+    // ของที่ยังไม่มีในบ้านนี้ ค่อยสร้างเพิ่ม (ไม่ทับของที่พ่อแม่เพิ่มเอง)
+    DEF_REWARDS.filter(r => !r.big).forEach(r => {
+      if(seen[r.name] || r.name === 'นอนดึกได้ 1 ชม.') return;
+      if(cs.docs.some(d => String(d.data().name||'').trim() === r.name)) return;
+      b.set(dref('rewards', r.id), r);
+    });
+    b.update(settingsRef(), {rewardsV5:true});
     await b.commit();
   }
   if(cur.urgentMin === undefined) await updateDoc(settingsRef(), {urgentMin:15});
