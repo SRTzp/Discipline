@@ -474,18 +474,33 @@ function weekStartTs(){
   d.setDate(d.getDate()-dow); d.setHours(0,0,0,0); return d.getTime();
 }
 function dayStartTs(){ const d = new Date(now()); d.setHours(0,0,0,0); return d.getTime(); }
+/* โควตารายวันแยกเป็น 2 ถัง — กันเคส "น้องดูเองไปแล้ว พี่กลับมาชวนดูด้วยกัน แล้วน้องกดไม่ได้"
+   own = รอบที่ตัวเองเป็นคนเริ่ม · inv = รอบที่พี่น้องชวนมาหาร
+   แต่ละถังใช้เพดาน limitDay เท่ากัน → วันหนึ่งจึงได้สูงสุด 2 รอบ แต่เริ่มเองได้แค่ 1
+   โควตารายสัปดาห์นับรวมทั้งสองถัง จึงยังคุมเวลาจอรวมไว้เท่าเดิม */
 function usedTimes(kidId, rid){
-  const mine = x => x.rid === rid && (x.kidId === kidId || x.partnerId === kidId);
-  const all = S.log.filter(l => l.kind==='reward' && mine(l))
-        .concat(S.pending.filter(p => p.type==='reward' && mine(p)));
-  const d = dayStartTs(), w = weekStartTs();
-  return {day: all.filter(x => x.ts >= d).length, week: all.filter(x => x.ts >= w).length};
+  const d = dayStartTs(), w = weekStartTs(), rows = [];
+  S.log.forEach(l => {
+    if(l.kind === 'reward' && l.rid === rid && l.kidId === kidId) rows.push({ts:l.ts, inv: !!l.inv});
+  });
+  S.pending.forEach(p => {
+    if((p.type !== 'reward' && p.type !== 'join') || p.rid !== rid) return;
+    if(p.kidId === kidId) rows.push({ts:p.ts, inv:false});
+    else if(p.partnerId === kidId) rows.push({ts:p.ts, inv:true});
+  });
+  const today = rows.filter(x => x.ts >= d);
+  return {day: today.length,
+          own: today.filter(x => !x.inv).length,
+          inv: today.filter(x =>  x.inv).length,
+          week: rows.filter(x => x.ts >= w).length};
 }
-function limitLeft(kidId, r){
+/* asInvited = true → เช็กถัง "ถูกชวน" (ใช้ตอนหาว่าใครมาหารกับเราได้บ้าง) */
+function limitLeft(kidId, r, asInvited){
   const u = usedTimes(kidId, r.id);
-  const dLeft = Number(r.limitDay||0)  ? Number(r.limitDay)  - u.day  : Infinity;
+  const ld = Number(r.limitDay || 0);
+  const dLeft = ld ? ld - (asInvited ? u.inv : u.own) : Infinity;
   const wLeft = Number(r.limitWeek||0) ? Number(r.limitWeek) - u.week : Infinity;
-  return {ok: dLeft > 0 && wLeft > 0, dLeft, wLeft, used:u};
+  return {ok: dLeft > 0 && wLeft > 0, dLeft, wLeft, used:u, invited: !!asInvited};
 }
 /* ---- แบ่งแต้มให้พี่น้อง: เพดานต่อคนต่อวัน (0 = ไม่จำกัด) ---- */
 const giveCap = () => Number(cfg().maxGiveDay || 0);
@@ -1179,23 +1194,23 @@ function viewKid(){
       const price = r.share ? half : Number(r.cost);
       const lim = limitLeft(k.id, r);
       const can = have >= price && lim.ok;
-      const jt = joinTarget(k.id, r);           // พี่น้องแลกไปแล้ว → ขอร่วมทีหลังได้
-      const canJoin = !!jt && have >= half;
+      // พี่น้องที่ยัง "ถูกชวน" ได้ (ต่อให้เขาดูเองไปแล้ววันนี้)
+      const mates = r.share ? S.kids.filter(x => x.id !== k.id
+        && available(x.id, pot) >= half && limitLeft(x.id, r, true).ok) : [];
       let sub;
-      if(jt) sub = `${esc((jt.other||{}).name||'พี่น้อง')}แลกไปแล้ว — กด 🤝 ร่วมด้วย จ่ายคนละ ${half}` +
-                   (canJoin ? '' : ` · ขาดอีก ${half-have}`);
-      else if(!lim.ok) sub = lim.dLeft<=0 ? `วันนี้แลกครบโควตาแล้ว` : `สัปดาห์นี้แลกครบแล้ว (${r.limitWeek} ครั้ง)`;
-      else if(r.share) sub = have>=price ? `หารกัน คนละ ${half} — แลกได้แล้ว!` : `หารกัน คนละ ${half} · ขาดอีก ${price-have}`;
+      if(!lim.ok) sub = lim.dLeft<=0
+        ? (mates.length ? `เริ่มเองครบแล้ววันนี้ — รอ${esc(mates[0].name)}ชวนหารได้อีก 1 รอบ` : `วันนี้แลกครบโควตาแล้ว`)
+        : `สัปดาห์นี้แลกครบแล้ว (${r.limitWeek} ครั้ง)`;
+      else if(r.share) sub = (have>=price ? `หารกัน คนละ ${half} — แลกได้แล้ว!` : `หารกัน คนละ ${half} · ขาดอีก ${price-have}`)
+        + (mates.length ? ` · ชวน${esc(mates[0].name)}ได้` : '');
       else sub = have>=price ? 'แลกได้เลย!' : `อีก ${price-have} แต้ม`;
       const quota = [];
       if(Number(r.limitDay))  quota.push(`วันละ ${r.limitDay}`);
       if(Number(r.limitWeek)) quota.push(`สัปดาห์ละ ${r.limitWeek} (เหลือ ${Math.max(0,lim.wLeft)})`);
-      return `<div class="item" style="${(lim.ok||jt)?'':'opacity:.5'}"><div class="emo">${r.emo}</div>
+      return `<div class="item" style="${lim.ok?'':'opacity:.5'}"><div class="emo">${r.emo}</div>
         <div class="txt"><b>${esc(r.name)}</b><span class="muted">${sub}${quota.length?' · '+quota.join(' · '):''}</span></div>
         <span class="tag tag-cost">${r.cost}${r.share?' 🤝':''}</span>
-        ${jt ? `<button class="${canJoin?'btn-gold':''} btn-sm" ${canJoin?'':'disabled'}
-          onclick="joinShare('${r.id}')">🤝 ร่วม ${half}</button>`
-        : `<button class="${can?'btn-gold':''} btn-sm" ${can?'':'disabled'} onclick="redeem('${r.id}')">แลก</button>`}</div>`;
+        <button class="${can?'btn-gold':''} btn-sm" ${can?'':'disabled'} onclick="redeem('${r.id}')">แลก</button></div>`;
     };
     const small = S.rewards.filter(r => !r.big);
     const big   = S.rewards.filter(r => r.big);
@@ -1320,6 +1335,7 @@ function joinShare(id){
   const r = S.rewards.find(x => x.id===id), kid = kidById(view.kidId);
   if(!r || !kid) return;
   const jt = joinTarget(kid.id, r);
+  modal = null; renderModal();
   if(!jt || !jt.other){ toast('ตอนนี้ยังไม่มีรายการของพี่น้องให้ร่วมนะ'); return; }
   const half = Math.ceil(Number(r.cost)/2), refund = Number(r.cost) - half;
   if(available(kid.id, jt.pot) < half){ toast(POT_NAME[jt.pot]+'ยังไม่พอสำหรับครึ่งหนึ่ง'); return; }
@@ -1343,7 +1359,9 @@ function joinShare(id){
   }), `${kid.name} ใส่ PIN เพื่อยืนยันว่าจะจ่าย ${half} แต้มร่วมกับ${jt.other.name}`);
 }
 function limitMsg(r, lim){
-  if(lim.dLeft <= 0) return `วันนี้แลก "${r.name}" ครบโควตาแล้ว (วันละ ${r.limitDay} ครั้ง)`;
+  if(lim.dLeft <= 0) return lim.invited
+    ? `วันนี้ถูกชวนหาร "${r.name}" ครบแล้ว (วันละ ${r.limitDay} ครั้ง)`
+    : `วันนี้เริ่ม "${r.name}" เองครบแล้ว (วันละ ${r.limitDay} ครั้ง) — แต่ยังถูกพี่น้องชวนหารได้อีก 1 รอบ`;
   if(lim.wLeft <= 0) return `สัปดาห์นี้แลก "${r.name}" ครบแล้ว (สัปดาห์ละ ${r.limitWeek} ครั้ง)`;
   return '';
 }
@@ -1354,8 +1372,11 @@ function redeem(id){
   const lim = limitLeft(kid.id, r);
   if(!lim.ok){ toast(limitMsg(r, lim)); return; }
   const half = Math.ceil(Number(r.cost)/2);
-  const others = S.kids.filter(x => x.id !== kid.id && available(x.id, pot) >= half && limitLeft(x.id, r).ok);
-  if(r.share && others.length){ modal = {kind:'share', r, kid, half, others, pot}; renderModal(); return; }
+  // คนที่มาหารได้ = ยังมีโควตาถัง "ถูกชวน" เหลือ (แม้เขาจะดูเองไปแล้ววันนี้ก็ยังมาหารรอบใหม่ได้)
+  const others = S.kids.filter(x => x.id !== kid.id
+    && available(x.id, pot) >= half && limitLeft(x.id, r, true).ok);
+  const jt = joinTarget(kid.id, r);          // ตัวเลือกที่ 2: แทรกรอบที่เขาแลกไปแล้ว
+  if(r.share && (others.length || jt)){ modal = {kind:'share', r, kid, half, others, pot, jt}; renderModal(); return; }
   if(available(kid.id, pot) < Number(r.cost)){
     toast(r.share ? 'ยังไม่มีใครแต้มพอมาหารด้วย และแต้มตัวเองก็ยังไม่พอ'
                   : POT_NAME[pot] + 'ยังไม่พอ'); return;
@@ -1370,6 +1391,8 @@ function shareWith(rewardId, partnerId){
   modal = null; renderModal();
   if(available(kid.id, pot) < half){ toast(POT_NAME[pot]+'ของหนูยังไม่พอสำหรับครึ่งหนึ่ง'); return; }
   if(available(partner.id, pot) < half){ toast(`${POT_NAME[pot]}ของ${partner.name}ยังไม่พอ`); return; }
+  const plim = limitLeft(partner.id, r, true);
+  if(!plim.ok){ toast(limitMsg(r, plim).replace('วันนี้', partner.name + ' วันนี้')); return; }
   // ต้องได้รับความยินยอมจากคนที่มาช่วยจ่าย — ให้เขามาใส่ PIN เอง
   askKidPin(partner, () => doRedeem(r, kid, half, partner),
             `${partner.name} มาใส่ PIN เพื่อยืนยันว่ายอมช่วยจ่าย ${half} แต้มนะ`);
@@ -1965,7 +1988,7 @@ async function approve(pid, override){
       await addLog(logEntry(p.kidId,'reward',p.name,p.emo,-Number(p.pts),{pot:rpot, rid:p.rid||''}));
       if(p.partnerId && kidById(p.partnerId)){        // หารกัน — หักอีกฝ่ายด้วย
         await addLog(logEntry(p.partnerId,'reward',p.name + ' (หารกัน)',p.emo,-Number(p.pts),
-                              {pot:rpot, rid:p.rid||''}));
+                              {pot:rpot, rid:p.rid||'', inv:true}));   // inv = ถูกชวนมาหาร
         toast(`อนุมัติแล้ว หักคนละ ${p.pts} แต้ม`);
       }else toast('อนุมัติแล้ว หัก ' + p.pts + ' แต้ม');
     }
@@ -2437,6 +2460,11 @@ function renderModal(){
             <span class="muted">มี ${available(o.id, modal.pot)} · จ่าย ${half}</span></div>
           <button class="btn-gold btn-sm" onclick="shareWith('${r.id}','${o.id}')">ชวนคนนี้</button>
         </div>`).join('')}
+        ${modal.jt && modal.jt.other ? `
+        <div class="sec-title" style="margin:16px 0 8px">หรือแทรกรอบที่${esc(modal.jt.other.name)}แลกไปแล้ววันนี้</div>
+        <div class="muted" style="margin-bottom:8px">ไม่ใช่รอบใหม่ — คือไปหารรอบเดิมย้อนหลัง
+          ${esc(modal.jt.other.name)}จะได้คืน ${Number(r.cost) - half} แต้ม แล้วจบที่คนละ ${half}</div>
+        <button class="btn-full" onclick="joinShare('${r.id}')">🔁 แทรกรอบเดิม — จ่าย ${half} · คืนให้${esc(modal.jt.other.name)} ${Number(r.cost) - half}</button>` : ''}
         <div class="sec-title" style="margin:16px 0 8px">หรือจ่ายเองคนเดียว</div>
         <button class="${available(modal.kid.id, modal.pot) >= r.cost ? 'btn-primary' : ''} btn-full"
           ${available(modal.kid.id, modal.pot) >= r.cost ? '' : 'disabled'} onclick="shareAlone('${r.id}')">
