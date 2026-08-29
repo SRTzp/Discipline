@@ -459,7 +459,8 @@ const balance = (kidId, pot) => Number((kidById(kidId)||{})[POT_FIELD[pot||'dail
    และคำขอแบ่งแต้มให้พี่น้อง (จองเฉพาะฝั่งคนให้) จะได้ไม่ใช้แต้มก้อนเดียวกันซ้ำ */
 const reserved = (kidId, pot) => S.pending.filter(p => (p.pot||'daily') === (pot||'daily')
                           && ( (p.type==='reward'   && (p.kidId===kidId || p.partnerId===kidId))
-                            || (p.type==='transfer' &&  p.kidId===kidId) ))
+                            || (p.type==='transfer' &&  p.kidId===kidId)
+                            || (p.type==='join'     &&  p.kidId===kidId) ))
                           .reduce((s,p)=>s+Number(p.pts),0);
 /* แต้มที่เอาไปค้ำประกันให้พี่น้อง ยังอยู่ในกระเป๋าแต่แตะไม่ได้จนกว่าหนี้จะปิด */
 const held = (kidId, pot) => kidBank(kidId)
@@ -1144,12 +1145,20 @@ function viewKid(){
       + (extraList.length ? `<div class="sec-title">⭐ งานเสริม — ทำเพิ่มได้แต้มเพิ่ม</div>`
           + extraList.map(c => choreRow(c,k.id)).join('') : '');
   }else if(view.tab === 'rewards'){
-    const waiting = myPend.filter(p => p.type==='reward' || p.type==='transfer');
+    const waiting = myPend.filter(p => p.type==='reward' || p.type==='transfer' || p.type==='join');
     const waitBox = waiting.length ? `<div class="card" style="background:var(--gold-soft)">
       <div class="sec-title" style="margin:0 0 6px">⏳ รออนุมัติ</div>
       ${waiting.map(p => {
         const mine = p.kidId === k.id;
         const other = kidById(mine ? p.partnerId : p.kidId);
+        if(p.type === 'join'){
+          return `<div class="log-line" style="border-color:#efe0c4">
+          <span style="font-size:19px">🤝</span>
+          <span style="flex:1">${esc(p.name)}<span class="muted" style="display:block">${
+            mine ? `ขอร่วมกับ ${esc((other||{}).name||'')} · จ่าย ${p.pts}`
+                 : `${esc((other||{}).name||'')} ขอร่วมด้วย · จะได้คืน ${p.refund}`} · ขอเมื่อ ${timeAgo(p.ts)}</span></span>
+          <span class="tag ${mine?'tag-cost':'tag-plus'}">${mine?'−'+p.pts:'+'+p.refund}</span></div>`;
+        }
         if(p.type === 'transfer'){
           return `<div class="log-line" style="border-color:#efe0c4">
           <span style="font-size:19px">🤝</span>
@@ -1170,17 +1179,23 @@ function viewKid(){
       const price = r.share ? half : Number(r.cost);
       const lim = limitLeft(k.id, r);
       const can = have >= price && lim.ok;
+      const jt = joinTarget(k.id, r);           // พี่น้องแลกไปแล้ว → ขอร่วมทีหลังได้
+      const canJoin = !!jt && have >= half;
       let sub;
-      if(!lim.ok) sub = lim.dLeft<=0 ? `วันนี้แลกครบโควตาแล้ว` : `สัปดาห์นี้แลกครบแล้ว (${r.limitWeek} ครั้ง)`;
+      if(jt) sub = `${esc((jt.other||{}).name||'พี่น้อง')}แลกไปแล้ว — กด 🤝 ร่วมด้วย จ่ายคนละ ${half}` +
+                   (canJoin ? '' : ` · ขาดอีก ${half-have}`);
+      else if(!lim.ok) sub = lim.dLeft<=0 ? `วันนี้แลกครบโควตาแล้ว` : `สัปดาห์นี้แลกครบแล้ว (${r.limitWeek} ครั้ง)`;
       else if(r.share) sub = have>=price ? `หารกัน คนละ ${half} — แลกได้แล้ว!` : `หารกัน คนละ ${half} · ขาดอีก ${price-have}`;
       else sub = have>=price ? 'แลกได้เลย!' : `อีก ${price-have} แต้ม`;
       const quota = [];
       if(Number(r.limitDay))  quota.push(`วันละ ${r.limitDay}`);
       if(Number(r.limitWeek)) quota.push(`สัปดาห์ละ ${r.limitWeek} (เหลือ ${Math.max(0,lim.wLeft)})`);
-      return `<div class="item" style="${lim.ok?'':'opacity:.5'}"><div class="emo">${r.emo}</div>
+      return `<div class="item" style="${(lim.ok||jt)?'':'opacity:.5'}"><div class="emo">${r.emo}</div>
         <div class="txt"><b>${esc(r.name)}</b><span class="muted">${sub}${quota.length?' · '+quota.join(' · '):''}</span></div>
         <span class="tag tag-cost">${r.cost}${r.share?' 🤝':''}</span>
-        <button class="${can?'btn-gold':''} btn-sm" ${can?'':'disabled'} onclick="redeem('${r.id}')">แลก</button></div>`;
+        ${jt ? `<button class="${canJoin?'btn-gold':''} btn-sm" ${canJoin?'':'disabled'}
+          onclick="joinShare('${r.id}')">🤝 ร่วม ${half}</button>`
+        : `<button class="${can?'btn-gold':''} btn-sm" ${can?'':'disabled'} onclick="redeem('${r.id}')">แลก</button>`}</div>`;
     };
     const small = S.rewards.filter(r => !r.big);
     const big   = S.rewards.filter(r => r.big);
@@ -1286,6 +1301,47 @@ async function doChore(id){
 }
 /* ---------- แลกของรางวัล (รางวัลใหญ่บางอย่างหารกันจ่ายได้) ---------- */
 const potOf = r => r.big ? 'extra' : 'daily';
+/* พี่น้องแลกไปก่อนแล้ว เรายังขอ "ร่วมด้วย" ทีหลังได้ — คนละครึ่ง คนที่จ่ายไปก่อนได้ส่วนต่างคืน
+   เงื่อนไข: รางวัลนี้หารได้ · เรายังไม่ได้ใช้โควตาของรายการนี้วันนี้ · เขายังจ่ายเต็มราคาอยู่ (ยังไม่มีคนหาร) */
+function joinTarget(kidId, r){
+  if(!r || !r.share) return null;
+  if(usedTimes(kidId, r.id).day > 0) return null;
+  if(S.pending.some(x => x.type==='join' && x.rid===r.id && x.kidId===kidId)) return null;
+  const pot = potOf(r), t = todayStr();
+  const pend = S.pending.find(x => x.type==='reward' && x.rid===r.id
+                            && x.kidId!==kidId && !x.partnerId);
+  if(pend) return {kind:'pending', p:pend, other:kidById(pend.kidId), pot};
+  const lg = S.log.find(l => l.kind==='reward' && l.rid===r.id && l.kidId!==kidId
+                        && dstr(l.ts)===t && Math.abs(Number(l.delta)) === Number(r.cost));
+  if(lg) return {kind:'log', l:lg, other:kidById(lg.kidId), pot};
+  return null;
+}
+function joinShare(id){
+  const r = S.rewards.find(x => x.id===id), kid = kidById(view.kidId);
+  if(!r || !kid) return;
+  const jt = joinTarget(kid.id, r);
+  if(!jt || !jt.other){ toast('ตอนนี้ยังไม่มีรายการของพี่น้องให้ร่วมนะ'); return; }
+  const half = Math.ceil(Number(r.cost)/2), refund = Number(r.cost) - half;
+  if(available(kid.id, jt.pot) < half){ toast(POT_NAME[jt.pot]+'ยังไม่พอสำหรับครึ่งหนึ่ง'); return; }
+  const msg = jt.kind === 'pending'
+    ? `ไปหารกับคำขอของ${jt.other.name}ที่ยังรออนุมัติอยู่ — จ่ายคนละ ${half} แต้ม`
+    : `${jt.other.name}จ่ายไป ${r.cost} แล้ว — ถ้าอนุมัติ หนูจ่าย ${half} และ${jt.other.name}ได้คืน ${refund} แต้ม`;
+  askKidPin(kid, () => openConfirm(`ขอร่วม "${r.name}"`, msg + ' · รอคุณพ่อคุณแม่อนุมัติก่อนนะ', async () => {
+    try{
+      if(jt.kind === 'pending'){       // ยังไม่อนุมัติ → แก้คำขอเดิมให้กลายเป็นหารกัน ไม่ต้องคืนอะไร
+        await setDoc(dref('pending', jt.p.id),
+          Object.assign({}, jt.p, {pts:half, partnerId:kid.id, partnerName:kid.name}));
+      }else{                           // อนุมัติไปแล้ว → เข้าคิวใหม่ หักคนขอ + คืนส่วนต่างให้คนแรก
+        const q = {id:uid(), ts:now(), kidId:kid.id, type:'join', name:r.name, emo:r.emo,
+                   pts:half, total:Number(r.cost), pot:jt.pot, rid:r.id,
+                   partnerId:jt.other.id, partnerName:jt.other.name, refund};
+        await setDoc(dref('pending', q.id), q);
+      }
+      showFlash({emo:'🤝', title:'ส่งคำขอร่วมแล้ว', big:`คนละ ${half} แต้ม`, color:'var(--gold)',
+        sub:`ร่วมกับ${jt.other.name} · รอคุณพ่อคุณแม่อนุมัติ`, toast:'ส่งคำขอแล้ว'});
+    }catch(e){ fail(e); }
+  }), `${kid.name} ใส่ PIN เพื่อยืนยันว่าจะจ่าย ${half} แต้มร่วมกับ${jt.other.name}`);
+}
 function limitMsg(r, lim){
   if(lim.dLeft <= 0) return `วันนี้แลก "${r.name}" ครบโควตาแล้ว (วันละ ${r.limitDay} ครั้ง)`;
   if(lim.wLeft <= 0) return `สัปดาห์นี้แลก "${r.name}" ครบแล้ว (สัปดาห์ละ ${r.limitWeek} ครั้ง)`;
@@ -1819,6 +1875,10 @@ function parentReview(){
            · หักคืนอัตโนมัติ ${cfg().loanRepayPct}% ของแต้มที่ได้ · ขอเมื่อ ${timeAgo(p.ts)}`
       : kind==='unlock'
         ? `🏦 ขอถอนเงินฝาก${POT_NAME[p.pot||'daily']} <b>${p.pts}</b> แต้ม ก่อนครบกำหนด — อนุมัติแล้วได้คืนแค่เงินต้น ไม่ได้ดอก · ขอเมื่อ ${timeAgo(p.ts)}`
+      : kind==='join'
+        ? `🤝 ขอร่วมรายการที่ ${esc(p.partnerName || (kidById(p.partnerId)||{}).name || '')} แลกไปแล้ววันนี้ —
+           ราคาเต็ม ${p.total} · หักคนขอ <b>${p.pts}</b> แล้วคืน <b>${p.refund}</b> ให้ ${
+           esc(p.partnerName || '')} (จบที่คนละ ${p.pts}) · ขอเมื่อ ${timeAgo(p.ts)}`
       : p.partnerId
         ? `🤝 หารกับ ${esc(p.partnerName || (kidById(p.partnerId)||{}).name || '')} — ราคาเต็ม ${p.total} แต้ม หักคนละ <b>${p.pts}</b> · ขอเมื่อ ${timeAgo(p.ts)}`
         : `ขอเมื่อ ${timeAgo(p.ts)}`;
@@ -1853,6 +1913,18 @@ async function approve(pid, override){
         {pot:cpot, due:p.due||'', status:p.status||'', lateMin:p.lateMin||0}), {ts:p.ts}));
       toast('ให้ ' + pts + ' แต้มแล้ว');
       await checkPerfectDay(p.kidId);
+    }else if(p.type === 'join'){           // ขอร่วมทีหลัง — หักคนขอครึ่งหนึ่ง แล้วคืนส่วนต่างให้คนที่จ่ายไปก่อน
+      const jpot = p.pot || 'daily';
+      const first = kidById(p.partnerId);
+      const me = kidById(p.kidId) || {};
+      await addLog(logEntry(p.kidId,'reward', p.name + ' (หารกัน)', p.emo,
+                            -Number(p.pts), {pot:jpot, rid:p.rid||''}));
+      if(first && Number(p.refund) > 0)
+        // ใช้ bankCommit แทน addLog เพื่อไม่ให้เงินคืนโดนหักใช้หนี้อัตโนมัติ — มันคือเงินที่จ่ายเกินไป ไม่ใช่รายได้ใหม่
+        await bankCommit(first.id, logEntry(first.id,'refund',
+          `คืนส่วนต่าง ${p.name} (${me.name||''} มาร่วมหาร)`, '↩️',
+          Number(p.refund), {pot:jpot, rid:p.rid||''}), null);
+      toast(`อนุมัติแล้ว — หัก ${p.pts} จาก${me.name||''} · คืน ${p.refund} ให้${(first||{}).name||''}`);
     }else if(p.type === 'loan'){           // อนุมัติเงินกู้ — จ่ายต้นเข้ากระเป๋า แล้วเปิดบัญชีหนี้
       const kid = kidById(p.kidId);
       if(kid && !activeLoan(kid.id)){
@@ -3093,7 +3165,7 @@ onAuthStateChanged(auth, async user => {
 Object.assign(window, {
   askPin, pinTap, pinDel, go, setTab, doChore, redeem, shareWith, shareAlone, giveAll,
   approve, reject, markParent, giveChore, applyPenalty, applyPenaltyAll, openAdjust, undoLog,
-  openGive, giveForm,
+  openGive, giveForm, joinShare,
   openDeposit, withdrawDep, askEarly, openLoan, payLoanAll, editBankNum, editBankTier,
   cosignWith, seizeCollateral,
   editKid, editItem, delItem, setOpt, editBonus, editGiveCap, editUrgentMin, editAutoSec, editIdleSec,
