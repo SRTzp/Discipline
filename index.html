@@ -164,6 +164,69 @@
   .pets{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .pets span{font-size:22px;line-height:1;animation:petIn .45s cubic-bezier(.2,1.6,.4,1) both}
   @keyframes petIn{0%{transform:scale(0) rotate(-30deg)}100%{transform:scale(1) rotate(0)}}
+  .pets span.pet{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+    border-radius:9px;background:var(--card);box-shadow:0 0 0 2px var(--rc)}
+  .pets span.pet.r2{box-shadow:0 0 0 2px var(--rc),0 0 10px 1px var(--rc)}
+  /* ---------- 🎮 หน้าเลี้ยงสัตว์ ---------- */
+  .stage{position:relative;border-radius:18px 18px 0 0;overflow:hidden;height:200px;background:#8fd3f4}
+  .stage .scene{position:absolute;inset:0;width:100%;height:100%}
+  .pethere{position:absolute;left:50%;bottom:2px;width:118px;margin-left:-59px}
+  .petsvg{width:100%;height:auto;overflow:visible}
+  /* รูปที่พ่อแม่แนบเอง — ใช้แทน SVG เมื่อมี · ขนาดไล่ตามร่างเหมือน SVG */
+  .petpic{display:block;width:100%;margin:0 auto;transform-origin:50% 100%;
+          filter:drop-shadow(0 6px 10px rgba(0,0,0,.3));animation:bob 2.8s ease-in-out infinite}
+  .petpic.s0{width:62%}
+  .petpic.s1{width:86%}
+  .petpic.sleeping{animation:snore 3.6s ease-in-out infinite}
+  .artslots{display:flex;gap:3px;width:100%;margin-top:5px}
+  .artslot{flex:1;min-width:0;border:1.5px dashed var(--line);border-radius:7px;padding:2px 1px;cursor:pointer;
+           background:var(--card);display:flex;flex-direction:column;align-items:center;gap:1px}
+  .artslot.has{border-style:solid;border-color:var(--good)}
+  .artslot img{width:100%;aspect-ratio:1;border-radius:4px;object-fit:cover;display:block}
+  .artslot .ph{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+               font-size:15px;color:var(--muted);line-height:1}
+  .artslot small{font-size:8px;line-height:1;color:var(--muted)}
+  .pet-body{animation:bob 2.8s ease-in-out infinite;transform-origin:50% 100%}
+  .petsvg.sleeping .pet-body{animation:snore 3.6s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-4px) scaleY(1.03)}}
+  @keyframes snore{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(1px) scale(1.03,.97)}}
+  .pet-eye{animation:blink 5.2s infinite;transform-origin:50% 42%}
+  @keyframes blink{0%,95%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+  .zzz text{animation:zup 2.4s ease-out infinite}
+  .zzz text:last-child{animation-delay:.8s}
+  @keyframes zup{0%{opacity:0;transform:translate(0,6px)}30%{opacity:.8}100%{opacity:0;transform:translate(6px,-10px)}}
+  .star{animation:tw 2.6s ease-in-out infinite}.star.s1{animation-delay:.8s}.star.s2{animation-delay:1.6s}
+  @keyframes tw{0%,100%{opacity:.35}50%{opacity:1}}
+  .bub{animation:rise 4.5s ease-in infinite}.bub.b1{animation-delay:1.4s}.bub.b2{animation-delay:2.8s}
+  @keyframes rise{0%{opacity:0;transform:translateY(14px)}25%{opacity:.7}100%{opacity:0;transform:translateY(-26px)}}
+  .bubble{position:absolute;left:10px;right:10px;top:9px;background:rgba(255,255,255,.94);
+    border-radius:14px;padding:7px 11px;font-size:12.5px;font-weight:700;color:var(--navy);
+    box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .bubble.warn{background:rgba(255,243,238,.96);color:var(--warn)}
+  .stat{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+  .stat-i{font-size:19px;flex:none;width:24px;text-align:center}
+  .stat small{font-size:11px;color:var(--muted);font-weight:700}
+  .sbar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:2px}
+  .sbar i{display:block;height:100%;border-radius:99px;transition:width .5s}
+  .carerow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+  .care{display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 2px;border-radius:14px;
+    background:var(--bg);border:2px solid var(--line);font-weight:800;color:var(--navy)}
+  .care span{font-size:23px;line-height:1.1}
+  .care b{font-size:11.5px}
+  .care small{font-size:9.5px;color:var(--muted);font-weight:700}
+  .care.off{opacity:.42}
+  .zoocell.live{box-shadow:0 0 0 3px var(--good)}
+  .zoocell .zoopic{height:38px;display:flex;align-items:center;justify-content:center}
+  .zoocell .zoopic svg{height:38px;width:auto}
+  @media (prefers-reduced-motion:reduce){
+    .pet-body,.pet-eye,.zzz text,.star,.bub{animation:none}
+  }
+  .zoo{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:7px;margin-bottom:12px}
+  .zoocell{text-align:center;padding:8px 3px;border-radius:12px;background:var(--bg);
+    box-shadow:0 0 0 2px var(--rc)}
+  .zoocell b{display:block;font-size:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .zoocell small{display:block;font-size:10px;color:var(--muted)}
+  .zoocell.locked{opacity:.4;box-shadow:0 0 0 2px var(--line);filter:grayscale(1)}
   .xpbar{height:7px;border-radius:99px;background:rgba(255,255,255,.28);overflow:hidden;margin-top:5px}
   .xpbar i{display:block;height:100%;background:#fff;opacity:.9;transition:width .6s}
   @media (prefers-reduced-motion:reduce){
@@ -339,7 +402,67 @@ function levelOf(xp){
           emo:'👑', name:'ตำนานแห่งบ้าน'};
 }
 /* สัตว์เลี้ยงที่ฟักออกมาได้ — สุ่มตอนไข่แตก ยิ่งฟักหลายฟองยิ่งเจอตัวหายาก */
-const PETS = ['🐤','🐢','🐰','🐹','🐧','🦔','🐨','🦊','🐼','🦄','🐉','🦖','🐙','🦩','🦥'];
+/* สัตว์ที่ฟักได้ — โทนนักล่า/ไดโนเสาร์/มังกร · r = ระดับความหายาก 0 ธรรมดา · 1 หายาก · 2 ตำนาน
+   n = ชื่ออังกฤษ (ให้เด็กได้ศัพท์ไปด้วย) · th = คำอ่านไทย
+   พ่อแม่แนบรูปจริงทับอีโมจิได้ทีหลัง (ตั้งค่า → คอกสัตว์เลี้ยง) */
+const PETS = [
+  {e:'🦎', n:'Gecko',     th:'เกคโค',      r:0},
+  {e:'🐍', n:'Cobra',     th:'คอบรา',      r:0},
+  {e:'🦂', n:'Scorpion',  th:'สกอร์เพียน', r:0},
+  {e:'🕷️', n:'Tarantula', th:'ทารันทูลา',  r:0},
+  {e:'🦇', n:'Bat',       th:'แบต',        r:0},
+  {e:'🐗', n:'Boar',      th:'บอร์',       r:0},
+  {e:'🦉', n:'Owl',       th:'เอาล์',      r:0},
+  {e:'🐙', n:'Octopus',   th:'อ็อกโทปัส',  r:0},
+  {e:'🐺', n:'Wolf',      th:'วูล์ฟ',      r:1},
+  {e:'🦈', n:'Shark',     th:'ชาร์ก',      r:1},
+  {e:'🐊', n:'Crocodile', th:'คร็อกโคไดล์', r:1},
+  {e:'🦅', n:'Eagle',     th:'อีเกิล',     r:1},
+  {e:'🦏', n:'Rhino',     th:'ไรโน',       r:1},
+  {e:'🦑', n:'Kraken',    th:'คราเคน',     r:1},
+  {e:'🦍', n:'Gorilla',   th:'กอริลลา',    r:1},
+  {e:'🐆', n:'Panther',   th:'แพนเธอร์',   r:2},
+  {e:'🐅', n:'Tiger',     th:'ไทเกอร์',    r:2},
+  {e:'🦁', n:'Lion',      th:'ไลออน',      r:2},
+  {e:'🦣', n:'Mammoth',   th:'แมมมอธ',     r:2},
+  {e:'🦖', n:'T-Rex',     th:'ที-เร็กซ์',  r:2},
+  {e:'🐉', n:'Dragon',    th:'ดรากอน',     r:2}
+];
+const RARITY = [{k:'ธรรมดา', c:'var(--muted)', w:62}, {k:'หายาก', c:'var(--navy)', w:30},
+                {k:'ตำนาน', c:'var(--gold)', w:8}];
+const petBy = e => PETS.find(x => x.e === e) || {e, n:'', th:'', r:0};
+/* รูปที่พ่อแม่แนบเอง (ถ้ามี) ทับอีโมจิ — แยกได้ 3 ร่างต่อ 1 ตัว
+   คีย์ = "อีโมจิ|ร่าง" เช่น "🐉|2" · คีย์เปล่า (แค่อีโมจิ) = ของเดิมก่อนมี 3 ร่าง นับเป็นร่างสมบูรณ์
+   เก็บแยก 3 เอกสารตามระดับหายาก (petart / petart1 / petart2) กันชนเพดาน 1MB ต่อเอกสารของ Firestore */
+const ART_DOC = ['petart', 'petart1', 'petart2'], STAGE_N = [0,1,2];
+const artDocOf = e => ART_DOC[petBy(e).r] || 'petart';
+const artKey = (e, st) => e + '|' + st;
+const artAll = () => (S && S.petart) || {};
+const artRaw = (e, st) => artAll()[artKey(e, st)] || (st === 2 ? (artAll()[e] || '') : '');
+/* ร่างที่ยังไม่ได้แนบรูป ขอยืมร่างที่ใกล้ที่สุดมาใช้ก่อน จะได้ไม่สลับไปมาระหว่างรูปจริงกับ SVG */
+function petArt(e, st){
+  const order = st === 0 ? [0,1,2] : st === 1 ? [1,2,0] : [2,1,0];
+  for(const s of order){ const v = artRaw(e, s); if(v) return v; }
+  return '';
+}
+const hasArt = e => STAGE_N.some(s => !!artRaw(e, s));
+function petImg(e, size, st){
+  const a = petArt(e, st === undefined ? 2 : st), s = size || 22;
+  return a ? `<img src="${a}" style="width:${s}px;height:${s}px;border-radius:6px;object-fit:cover;vertical-align:middle">`
+           : `<span style="font-size:${s}px;line-height:1">${e}</span>`;
+}
+/* สุ่มระดับความหายากก่อน แล้วค่อยสุ่มตัวที่ยังไม่มีในระดับนั้น — ถ้าระดับนั้นเก็บครบแล้วค่อยขยับไประดับอื่น */
+function rollPet(owned){
+  const has = e => owned.indexOf(e) >= 0;
+  const tiers = [0,1,2].map(r => PETS.filter(x => x.r === r && !has(x.e)));
+  let total = 0; const avail = [];
+  RARITY.forEach((R,i) => { if(tiers[i].length){ total += R.w; avail.push({i, w:R.w}); } });
+  if(!total) return PETS[(Math.random()*PETS.length)|0];      // เก็บครบทุกตัวแล้ว — สุ่มซ้ำได้
+  let roll = Math.random() * total, pickTier = avail[0].i;
+  for(const a of avail){ if(roll < a.w){ pickTier = a.i; break; } roll -= a.w; }
+  const pool = tiers[pickTier];
+  return pool[(Math.random()*pool.length)|0];
+}
 /* ไข่ต้องการ "ความอบอุ่น" — ได้จากการทำงานตรงเวลาเท่านั้น ซื้อด้วยแต้มไม่ได้
    ตรงเวลา 1 อย่าง = +3 · ทำครบทั้งวัน = +10 → วันละ ~34 → ฟองแรกแตกใน ~3 วัน */
 const WARM_ONTIME = 3, WARM_PERFECT = 10;
@@ -349,7 +472,7 @@ const eggPct  = k => Math.min(100, Math.round(Number((k||{}).eggWarm||0) / eggNe
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
                       autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60,
                       rewardsV4:true, eveningV1:true, potFixV1:true, parentPin:'1234',
-                      shareSmallV1:true, rewardsV5:true, funV1:true, soundOn:true, maxGiveDay:50,
+                      shareSmallV1:true, rewardsV5:true, funV1:true, soundOn:true, tamaV1:true, treatCost:3, treatMax:2, maxGiveDay:50,
                       /* ---- 🏦 ธนาคารแต้ม ----
                          ตัวเลขชุดนี้คุมไม่ให้แต้มเฟ้อ: ดอกฝากผลิตแต้มใหม่ได้สูงสุด
                          🎈 200×10%/14วัน = 10/สัปดาห์ (2.5% ของรายได้ 400)
@@ -855,13 +978,15 @@ async function checkHatch(kidId, warm){
   const k = kidById(kidId); if(!k) return;
   const need = eggNeed(k);
   if(warm < need) return;
-  const pool = PETS.filter(x => (k.pets||[]).indexOf(x) < 0);
-  const pet = (pool.length ? pool : PETS)[(Math.random()*(pool.length||PETS.length))|0];
+  const owned = Array.isArray(k.pets) ? k.pets : [];
+  const P = rollPet(owned), R = RARITY[P.r];
   try{
     await updateDoc(dref('kids', kidId),
-      {pets: (Array.isArray(k.pets)?k.pets:[]).concat([pet]), eggWarm: Math.max(0, warm - need)});
-    cheer.push({lv:3, emo:pet, title:'ไข่ฟักแล้ว! 🎊', big:'ได้เพื่อนใหม่', color:'var(--good)',
-      sub:'ฟักได้จากการทำงานตรงเวลาเท่านั้น ซื้อด้วยแต้มไม่ได้นะ', toast:`ไข่ฟักแล้ว! ได้ ${pet}`});
+      {pets: owned.concat([P.e]), eggWarm: Math.max(0, warm - need)});
+    cheer.push({lv:3, emo:P.e, title:`ไข่ฟักแล้ว! ${P.r===2?'✨ ตำนาน ✨':P.r===1?'⭐ หายาก':'🎊'}`,
+      big:`${P.n} · ${P.th}`, color:R.c,
+      sub:`สัตว์ระดับ "${R.k}" — ฟักได้จากการทำงานตรงเวลาเท่านั้น ซื้อด้วยแต้มไม่ได้นะ`,
+      toast:`ไข่ฟักแล้ว! ได้ ${P.e} ${P.n} (${R.k})`});
   }catch(e){ fail(e); }
 }
 async function removeLog(entry){
@@ -1317,7 +1442,7 @@ function viewKid(){
   const availD = available(k.id, 'daily'), availE = available(k.id, 'extra');
   const avail = availD;
   const myPend = S.pending.filter(p => p.kidId===k.id || p.partnerId===k.id);
-  const tabs = [['chores','วันนี้'],['rewards','ของรางวัล']]
+  const tabs = [['chores','วันนี้'],['rewards','ของรางวัล'],['zoo','🐾 คอกสัตว์']]
     .concat(bankOn() ? [['bank','🏦 ธนาคาร']] : []).concat([['history','ประวัติ']]);
   const tabBtns = tabs.map(([id,l]) => `<button class="${view.tab===id?'on':''}" onclick="setTab('${id}')">${l}</button>`).join('');
   let body = '';
@@ -1399,6 +1524,8 @@ function viewKid(){
       + (small.map(rewardRow).join('') || '<div class="empty">ยังไม่มีรางวัลเล็ก</div>')
       + `<div class="sec-title">💎 รางวัลใหญ่ — ใช้แต้มพิเศษเท่านั้น (มี ${available(k.id,'extra')}) · 🤝 = หารกันได้</div>`
       + (big.map(rewardRow).join('') || '<div class="empty">ยังไม่มีรางวัลใหญ่</div>');
+  }else if(view.tab === 'zoo'){
+    body = petHome(k) + petCard(k) + petZoo(k);
   }else if(view.tab === 'bank'){
     body = bankTab(k, myPend);
   }else{
@@ -1657,6 +1784,338 @@ function doGive(kid, partner, pot, n){
     `${kid.name} ใส่ PIN เพื่อยืนยันว่าจะแบ่ง ${n} แต้มให้${partner.name}`);
 }
 
+/* ============================================================
+   👾 มอนสเตอร์ 2D — โครงยืนสองขาแบบ "digital monster"
+   หัวใหญ่มีปากยื่น + เขี้ยว · แขน/ขามีเล็บ 3 นิ้ว · พุงเป็นแผ่นเกล็ด · หางหนา
+   เส้นขอบดำหนา สีสด — ออกแบบใหม่ทั้งหมด ไม่ได้ลอกตัวละครของใคร
+   ชิ้นส่วนสลับกันได้ เพิ่มมอนสเตอร์ตัวใหม่ = เติม RECIPE บรรทัดเดียว
+   ============================================================ */
+const OUT = '#241f2b', SW = 3;
+const P = (d, f, w) => `<path d="${d}" fill="${f||'none'}" stroke="${OUT}" stroke-width="${w||SW}"
+  stroke-linejoin="round" stroke-linecap="round"/>`;
+const EL = (cx, cy, rx, ry, f) => P(`M${cx-rx} ${cy}a${rx} ${ry} 0 1 0 ${rx*2} 0a${rx} ${ry} 0 1 0 ${-rx*2} 0`, f);
+
+/* ---- เล็บ 3 นิ้ว ---- */
+const claw3 = (x, y, dir, len) => `<g stroke="${OUT}" stroke-width="2.4" stroke-linecap="round" fill="none">
+  <path d="M${x-4} ${y}l${-2*dir} ${len}"/><path d="M${x} ${y}l0 ${len+1}"/><path d="M${x+4} ${y}l${2*dir} ${len}"/></g>`;
+
+/* ---- ขาสองข้าง + เท้ามีเล็บ ---- */
+function legsRig(c1, c2, st){
+  const w = st===2 ? 15 : 13, y = st===2 ? 74 : 76;
+  const leg = x => P(`M${x} ${y}h${w}v${100-y-6}a${w/2} 7 0 0 1 ${-w} 0z`, c1)
+    + EL(x+w/2, 99, w/2+2, 6, c2) + claw3(x+w/2, 101, 1, 4);
+  return leg(24) + leg(61);
+}
+/* ---- แขนสองข้าง กางออก มีเล็บ ---- */
+function armsRig(c1, st){
+  const drop = st===2 ? 20 : 17;
+  const arm = (x, dir) => P(`M${x} 56c${dir*7} 2 ${dir*11} 8 ${dir*11} ${drop}
+    a7 8 0 0 ${dir>0?1:0} ${-dir*13} 0c0-8 ${dir*2}-${drop-6} ${-dir*2}-${drop-6}z`.replace(/\s+/g,' '), c1)
+    + claw3(x + dir*12, 56+drop+4, dir, st===2?7:5);
+  return arm(24, -1) + arm(76, 1);
+}
+/* ---- ลำตัว + พุงเป็นแผ่น ---- */
+function torso(shape, c1, c2, bel){
+  const SH = {
+    pear:  'M50 40c-17 0-25 12-25 26s9 22 25 22 25-8 25-22-8-26-25-26z',
+    stout: 'M50 40c-20 0-28 13-28 25s10 23 28 23 28-11 28-23-8-25-28-25z',
+    slim:  'M50 41c-14 0-21 11-21 24s8 21 21 21 21-8 21-21-7-24-21-24z',
+    drop:  'M50 38c-18 0-27 15-27 28s10 22 27 22 27-9 27-22-9-28-27-28z'
+  };
+  const B = SH[shape] || SH.pear;
+  const belly = EL(50, 72, 15, 15, bel);
+  const plates = `<g stroke="${OUT}" stroke-width="2" fill="none" opacity=".8">
+    <path d="M37 66h26M36 74h28M39 82h22"/></g>`;
+  return P(B, c1) + belly + plates;
+}
+/* ---- หัว 5 แบบ — จุดที่ทำให้แต่ละตัวต่างกันมากที่สุด ---- */
+function headRig(kind, c1, c2, bel, st, mood){
+  const cy = 33, fierce = st===2;
+  let out = EL(50, cy, 25, 22, c1);
+  if(kind === 'dino'){                                   // ปากยื่น + เขี้ยวบน
+    out += EL(50, cy+13, 15, 10, bel)
+      + P(`M40 ${cy+13}h20`) + P(`M43 ${cy+13}l2 5 3-5`, '#fff') + P(`M57 ${cy+13}l-2 5-3-5`, '#fff')
+      + `<circle cx="45" cy="${cy+7}" r="1.6" fill="${OUT}"/><circle cx="55" cy="${cy+7}" r="1.6" fill="${OUT}"/>`;
+  } else if(kind === 'beast'){                            // จมูกสั้น + หูตั้ง
+    out = P(`M28 ${cy-12}l-5-17 17 8z`, c1) + P(`M72 ${cy-12}l5-17-17 8z`, c1) + out
+      + EL(50, cy+13, 12, 8, bel) + `<circle cx="50" cy="${cy+9}" r="3" fill="${OUT}"/>`
+      + P(`M50 ${cy+12}v3M50 ${cy+15}q-4 3-7 0M50 ${cy+15}q4 3 7 0`);
+  } else if(kind === 'bird'){                             // จะงอยปาก
+    out += P(`M50 ${cy+6}l11 9-11 8-11-8z`, '#f5c451');
+  } else if(kind === 'aqua'){                             // ครีบหัว + ปากกว้าง
+    out = P(`M50 ${cy-30}c6 6 8 13 8 20h-16c0-7 2-14 8-20z`, c2) + out
+      + P(`M35 ${cy+11}q15 12 30 0`, bel);
+  } else if(kind === 'bug'){                              // เขี้ยวคีบ
+    out += P(`M38 ${cy+12}q-6 6-3 12 5-3 8-8z`, c2) + P(`M62 ${cy+12}q6 6 3 12-5-3-8-8z`, c2)
+      + P(`M42 ${cy+13}h16`);
+  }
+  return out;
+}
+/* ---- เขา ---- */
+function hornRig(kind, st){
+  const g = st===2 ? 1.4 : 1, IV = '#f6ecd2';
+  switch(kind){
+    case 'nose': return P(`M50 ${44}l${-5*g} ${9*g}h${10*g}z`, IV);
+    case 'top':  return P(`M50 ${11-6*g}l${6*g} ${14*g}h${-12*g}z`, IV);
+    case 'twin': return P(`M36 14c${-3*g} ${-7*g} ${-8*g} ${-9*g} ${-11*g} ${-13*g} ${8*g} 1 ${14*g} ${5*g} ${17*g} ${11*g}z`, IV)
+      + P(`M64 14c${3*g} ${-7*g} ${8*g} ${-9*g} ${11*g} ${-13*g}-${8*g} 1-${14*g} ${5*g}-${17*g} ${11*g}z`, IV);
+    case 'crown':return P(`M32 16l4-11 6 8 8-12 8 12 6-8 4 11z`, IV);
+    default: return '';
+  }
+}
+/* ---- ของหลัง: ปีก / หนาม / กระดอง ---- */
+function backRig(kind, c2, st){
+  if(kind === 'wing') return P(`M26 52c-13-11-26-16-29-10-3 7 2 13 8 17-6 2-10 7-7 12 4 7 17 4 30-6z`, c2)
+    + P(`M74 52c13-11 26-16 29-10 3 7-2 13-8 17 6 2 10 7 7 12-4 7-17 4-30-6z`, c2);
+  if(kind === 'spike') return [[72,48],[80,60],[80,74]].map(([x,y]) =>
+    P(`M${x} ${y}l${13} ${-4} ${-4} ${13}z`, c2)).join('')
+    + [[28,48],[20,60]].map(([x,y]) => P(`M${x} ${y}l${-13} ${-4} ${4} ${13}z`, c2)).join('');
+  if(kind === 'shell') return EL(50, 62, 30, 26, c2);
+  return '';
+}
+/* ---- ลายบนตัว ---- */
+function markRig(kind, c2){
+  switch(kind){
+    case 'stripe': return `<g fill="${c2}" opacity=".8"><rect x="27" y="46" width="6" height="16" rx="3"/>
+      <rect x="67" y="46" width="6" height="16" rx="3"/><rect x="27" y="66" width="5" height="14" rx="2.5"/>
+      <rect x="68" y="66" width="5" height="14" rx="2.5"/></g>`;
+    case 'spot': return `<g fill="${c2}" opacity=".7"><circle cx="31" cy="55" r="4.5"/><circle cx="69" cy="55" r="4.5"/>
+      <circle cx="29" cy="70" r="4"/><circle cx="71" cy="70" r="4"/></g>`;
+    case 'scale': return `<g fill="none" stroke="${c2}" stroke-width="2.4" opacity=".8">
+      <path d="M28 52q5-6 10 0M62 52q5-6 10 0M26 64q5-6 10 0M64 64q5-6 10 0"/></g>`;
+    default: return '';
+  }
+}
+/* ---- ตา — จุดที่บอกอารมณ์ ---- */
+function eyesRig(mood, st){
+  const cy = 30, ex = 11, r = st===2 ? 8 : 7.4;
+  if(mood === 'sleep') return `<g stroke="${OUT}" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M${50-ex-6} ${cy}q6 6 12 0"/><path d="M${50+ex-6} ${cy}q6 6 12 0"/></g>`;
+  const white = EL(50-ex, cy, r, r*1.05, '#fff') + EL(50+ex, cy, r, r*1.05, '#fff');
+  const pup = `<circle cx="${50-ex}" cy="${cy+1}" r="${r*0.5}" fill="${OUT}"/>
+    <circle cx="${50+ex}" cy="${cy+1}" r="${r*0.5}" fill="${OUT}"/>
+    <circle cx="${50-ex+2}" cy="${cy-2}" r="2" fill="#fff"/><circle cx="${50+ex+2}" cy="${cy-2}" r="2" fill="#fff"/>`;
+  const brow = (st===2 || mood==='sad')
+    ? `<g stroke="${OUT}" stroke-width="3.2" stroke-linecap="round">
+       <path d="M${50-ex-8} ${cy-10}l12 ${mood==='sad'?5:4}"/><path d="M${50+ex+8} ${cy-10}l-12 ${mood==='sad'?5:4}"/></g>` : '';
+  return `<g class="pet-eye">${white}${pup}</g>${brow}`;
+}
+
+/* หาง */
+function tailRig(kind, c1, c2, st){
+  const g = st===2 ? 1.25 : 1;
+  switch(kind){
+    case 'thick': return P(`M74 80c${16*g} 4 ${22*g}-6 ${20*g}-${18*g}l-9 3c1 8-4 12-13 9z`, c1);
+    case 'spike': return P(`M74 78c${17*g} 2 ${24*g}-9 ${23*g}-${22*g}l-8 6 2-10-8 6-1-8c-8 10-13 20-8 28z`, c1);
+    case 'fin':   return P(`M74 72c${11*g}-11 ${20*g}-14 ${25*g}-13-5 7-5 18 0 27-7 1-16-3-25-14z`, c2);
+    case 'puff':  return P(`M74 78c12 3 16-3 15-11`, 'none', 8).replace(`stroke="${OUT}"`,`stroke="${c1}"`)
+      + P(`M74 78c12 3 16-3 15-11`) + EL(90, 64, 8*g, 8*g, c2);
+    default: return '';
+  }
+}
+/* สูตรมอนสเตอร์ — hd หัว · hn เขา · bk ของหลัง · tl หาง · mk ลาย · bd ลำตัว */
+const RECIPE = {
+  '🦎':{hd:'dino', hn:'top',  bk:'spike', tl:'thick', mk:'spot',  bd:'slim',  c1:'#57d95c', c2:'#238f3e', b:'#c8f7c0', h:'desert'},
+  '🐍':{hd:'dino', hn:'',     bk:'',      tl:'thick', mk:'scale', bd:'slim',  c1:'#95e34a', c2:'#4d9c1e', b:'#e2f7b8', h:'desert'},
+  '🦂':{hd:'bug',  hn:'twin', bk:'spike', tl:'spike', mk:'',      bd:'stout', c1:'#e07524', c2:'#8a3b0c', b:'#ffd6a8', h:'desert'},
+  '🕷️':{hd:'bug',  hn:'',     bk:'spike', tl:'',      mk:'spot',  bd:'stout', c1:'#7d55a0', c2:'#3d2352', b:'#d9c2ec', h:'forest'},
+  '🦇':{hd:'beast',hn:'',     bk:'wing',  tl:'',      mk:'',      bd:'slim',  c1:'#9a78e8', c2:'#4c2f96', b:'#ded0ff', h:'forest'},
+  '🐗':{hd:'beast',hn:'twin', bk:'',      tl:'puff',  mk:'',      bd:'stout', c1:'#b8804f', c2:'#6b3f1c', b:'#f2d9b8', h:'forest'},
+  '🦉':{hd:'bird', hn:'',     bk:'wing',  tl:'fin',   mk:'spot',  bd:'pear',  c1:'#e8a63f', c2:'#8f5615', b:'#ffe6b8', h:'forest'},
+  '🐙':{hd:'aqua', hn:'',     bk:'',      tl:'',      mk:'spot',  bd:'drop',  c1:'#f56bb0', c2:'#9c2e6b', b:'#ffd0e8', h:'ocean'},
+  '🐺':{hd:'beast',hn:'',     bk:'spike', tl:'puff',  mk:'',      bd:'pear',  c1:'#a8bad6', c2:'#4f6180', b:'#e4ecf7', h:'snow'},
+  '🦈':{hd:'aqua', hn:'',     bk:'',      tl:'fin',   mk:'',      bd:'drop',  c1:'#66b0e0', c2:'#245c8f', b:'#d4ecff', h:'ocean'},
+  '🐊':{hd:'dino', hn:'nose', bk:'spike', tl:'spike', mk:'scale', bd:'slim',  c1:'#4fc44a', c2:'#1f6b22', b:'#d2f5bd', h:'ocean'},
+  '🦅':{hd:'bird', hn:'crown',bk:'wing',  tl:'fin',   mk:'',      bd:'pear',  c1:'#c98a3f', c2:'#6b3a12', b:'#ffe0b0', h:'snow'},
+  '🦏':{hd:'beast',hn:'nose', bk:'shell', tl:'thick', mk:'',      bd:'stout', c1:'#b5bcc6', c2:'#5c646f', b:'#e8edf3', h:'desert'},
+  '🦑':{hd:'aqua', hn:'',     bk:'',      tl:'fin',   mk:'',      bd:'drop',  c1:'#5f8ff5', c2:'#2340a0', b:'#cfe0ff', h:'ocean'},
+  '🦍':{hd:'beast',hn:'',     bk:'',      tl:'',      mk:'',      bd:'stout', c1:'#6b6e7d', c2:'#2f313d', b:'#c9ccd6', h:'forest'},
+  '🐆':{hd:'beast',hn:'',     bk:'spike', tl:'thick', mk:'spot',  bd:'pear',  c1:'#ffd23f', c2:'#8f6510', b:'#fff0bd', h:'forest'},
+  '🐅':{hd:'beast',hn:'',     bk:'spike', tl:'thick', mk:'stripe',bd:'pear',  c1:'#ff9c2e', c2:'#8f3f06', b:'#ffe3bd', h:'forest'},
+  '🦁':{hd:'beast',hn:'crown',bk:'',      tl:'puff',  mk:'',      bd:'stout', c1:'#ffc340', c2:'#b06d10', b:'#ffedc0', h:'desert'},
+  '🦣':{hd:'beast',hn:'twin', bk:'shell', tl:'thick', mk:'',      bd:'stout', c1:'#b5793f', c2:'#633a17', b:'#f0d3ae', h:'snow'},
+  '🦖':{hd:'dino', hn:'nose', bk:'spike', tl:'spike', mk:'scale', bd:'pear',  c1:'#5fd14a', c2:'#2b7a1c', b:'#d6f7c2', h:'forest'},
+  '🐉':{hd:'dino', hn:'twin', bk:'wing',  tl:'spike', mk:'scale', bd:'pear',  c1:'#2fd68a', c2:'#0f7a4a', b:'#c2fae0', h:'volcano'}
+};
+const STAGE = [{k:'baby', s:.62, th:'ตัวอ่อน'}, {k:'rookie', s:.86, th:'ร่างปกติ'}, {k:'champ', s:1, th:'ร่างสมบูรณ์'}];
+
+function petSVG(emo, mood, stage, cls){
+  const R = RECIPE[emo];
+  if(!R) return `<span style="font-size:56px">${emo}</span>`;
+  const st = Math.max(0, Math.min(2, stage|0)), sc = STAGE[st].s;
+  /* ตัวอ่อน = หัวโตตัวจิ๋ว ยังไม่มีแขน/เขา/ของหลัง — เห็นความต่างชัดตอนวิวัฒนาการ */
+  if(st === 0) return `<svg viewBox="0 0 100 110" class="petsvg ${cls||''}">
+    <ellipse cx="50" cy="104" rx="20" ry="4.5" fill="#000" opacity=".18"/>
+    <g class="pet-body" style="transform:translate(50px,106px) scale(.78) translate(-50px,-106px)">
+      ${P('M50 58c-15 0-23 11-23 22s8 18 23 18 23-7 23-18-8-22-23-22z', R.c1)}
+      ${EL(50, 88, 12, 10, R.b)}
+      ${headRig(R.hd === 'bird' ? 'bird' : R.hd === 'aqua' ? 'aqua' : 'dino', R.c1, R.c2, R.b, 0, mood)
+        .replace(/cy="33"/g,'cy="33"')}
+      ${eyesRig(mood, 0)}
+      ${mood==='sleep' ? `<g class="zzz" fill="${OUT}" font-size="12" font-weight="900">
+        <text x="76" y="20">z</text><text x="85" y="10">Z</text></g>` : ''}
+    </g></svg>`;
+  return `<svg viewBox="0 0 100 110" class="petsvg ${cls||''}">
+    <ellipse cx="50" cy="105" rx="${28*sc}" ry="5" fill="#000" opacity=".18"/>
+    <g class="pet-body" style="transform:translate(50px,107px) scale(${sc}) translate(-50px,-107px)">
+      ${tailRig(R.tl, R.c1, R.c2, st)}
+      ${backRig(R.bk, R.c2, st)}
+      ${legsRig(R.c1, R.c2, st)}
+      ${armsRig(R.c1, st)}
+      ${torso(R.bd, R.c1, R.c2, R.b)}
+      ${markRig(R.mk, R.c2)}
+      ${hornRig(R.hn, st)}
+      ${headRig(R.hd, R.c1, R.c2, R.b, st, mood)}
+      ${eyesRig(mood, st)}
+      ${mood==='sleep' ? `<g class="zzz" fill="${OUT}" font-size="12" font-weight="900">
+        <text x="80" y="18">z</text><text x="89" y="8">Z</text></g>` : ''}
+    </g></svg>`;
+}
+/* ---------- 🏞️ ฉาก 2D ตามถิ่นที่อยู่ + เวลาจริง ---------- */
+const SKY = {
+  day:  ['#8fd3f4','#dff3fb'], dusk: ['#f7b267','#fce3c3'], night:['#2b3a67','#54608f']
+};
+function timeBand(){ const h = new Date(now()).getHours();
+  return (h>=19||h<6) ? 'night' : (h>=17||h<7) ? 'dusk' : 'day'; }
+let sceneN = 0;
+function scene(hab, mood){
+  const t = timeBand(), sk = SKY[t], night = t==='night';
+  // id ต้องไม่ซ้ำ ถ้าวาดหลายฉากในหน้าเดียวกันแล้วใช้ id เดียวกัน เบราว์เซอร์จะหยิบอันแรกมาใช้หมด
+  const gid = 'sky' + (++sceneN);
+  const sun = night
+    ? `<circle cx="160" cy="26" r="11" fill="#fdf6d8"/><circle cx="155" cy="22" r="10" fill="${sk[0]}"/>
+       ${[[20,18],[45,30],[70,14],[100,26],[125,12],[180,40],[35,48]].map(
+         ([x,y],i)=>`<circle class="star s${i%3}" cx="${x}" cy="${y}" r="1.6" fill="#fff"/>`).join('')}`
+    : `<circle cx="162" cy="24" r="13" fill="${t==='dusk'?'#ff9e4f':'#ffd86b'}"/>`;
+  const cloud = night ? '' : `<g fill="#fff" opacity=".75">
+    <ellipse cx="42" cy="24" rx="16" ry="8"/><ellipse cx="54" cy="22" rx="11" ry="7"/>
+    <ellipse cx="112" cy="16" rx="13" ry="6"/></g>`;
+  const G = {
+    forest:  {g:'#6fa84f', g2:'#4d7f36', deco:`<g><path d="M18 78l10-24 10 24z" fill="#3f7a3a"/><path d="M18 86l10-22 10 22z" fill="#4d8f45"/>
+      <rect x="26" y="84" width="4" height="9" fill="#6b4b2f"/>
+      <path d="M170 80l9-22 9 22z" fill="#3f7a3a"/><rect x="177" y="78" width="4" height="14" fill="#6b4b2f"/>
+      <ellipse cx="150" cy="90" rx="9" ry="5" fill="#5c9146"/></g>`},
+    desert:  {g:'#e6c98f', g2:'#c9a869', deco:`<g><path d="M22 90V70a5 5 0 0 1 10 0v20z" fill="#4f8f57"/>
+      <path d="M14 82a4 4 0 0 1 8 0v6h-8z" fill="#4f8f57"/><path d="M32 78a4 4 0 0 1 8 0v10h-8z" fill="#4f8f57"/>
+      <ellipse cx="165" cy="88" rx="14" ry="5" fill="#d4b678"/><ellipse cx="140" cy="92" rx="9" ry="4" fill="#d4b678"/></g>`},
+    ocean:   {g:'#e8d9a8', g2:'#cbb87f', sea:1, deco:`<g><path d="M24 92c-4-10 2-16 0-24 6 6 10 14 6 24z" fill="#3f8f7a"/>
+      <path d="M34 92c-3-8 1-13 0-19 5 5 8 12 5 19z" fill="#4fa88f"/>
+      <path d="M172 92c-4-12 2-18 0-26 6 7 10 16 6 26z" fill="#3f8f7a"/>
+      <g fill="#fff" opacity=".5"><circle class="bub b0" cx="60" cy="60" r="3"/><circle class="bub b1" cx="120" cy="52" r="2.4"/>
+      <circle class="bub b2" cx="150" cy="64" r="3.4"/></g></g>`},
+    snow:    {g:'#f2f6fa', g2:'#d6e2ee', deco:`<g><path d="M20 84l9-22 9 22z" fill="#4a7a5c"/><path d="M20 90l9-18 9 18z" fill="#f6fafd"/>
+      <rect x="27" y="88" width="4" height="7" fill="#6b4b2f"/>
+      <path d="M172 86l8-20 8 20z" fill="#4a7a5c"/><path d="M172 91l8-15 8 15z" fill="#f6fafd"/>
+      <ellipse cx="148" cy="92" rx="11" ry="4" fill="#fff"/></g>`},
+    volcano: {g:'#6b5a55', g2:'#463b38', deco:`<g><path d="M8 88l22-32 22 32z" fill="#4a3b38"/><path d="M22 62h16l-4 6h-8z" fill="#e2622d"/>
+      <path d="M160 90l18-26 18 26z" fill="#4a3b38"/>
+      <g fill="#f0873c" opacity=".9"><circle class="bub b1" cx="30" cy="52" r="2.6"/><circle class="bub b2" cx="178" cy="58" r="2.2"/></g></g>`}
+  }[hab] || {g:'#6fa84f', g2:'#4d7f36', deco:''};
+  return `<svg viewBox="0 0 200 110" class="scene ${night?'night':''}" preserveAspectRatio="xMidYMax slice">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${sk[0]}"/><stop offset="1" stop-color="${sk[1]}"/></linearGradient></defs>
+    <rect width="200" height="110" fill="url(#${gid})"/>
+    ${sun}${cloud}
+    ${G.sea ? `<rect y="30" width="200" height="80" fill="#3f8fc4" opacity=".35"/>` : ''}
+    <path d="M0 84q50-10 100 0t100 0v26H0z" fill="${G.g}"/>
+    <path d="M0 92q50-8 100 0t100 0v18H0z" fill="${G.g2}" opacity=".55"/>
+    ${G.deco}
+  </svg>`;
+}
+
+/* ---------- 🍖 ระบบเลี้ยง ---------- */
+const FEED_MS = 20*3600e3, PLAY_MS = 30*3600e3, WASH_MS = 48*3600e3;
+const petStOf = k => (k && k.petst && k.pet && k.petst[k.pet]) || null;
+const activePet = k => (k && k.pet && (k.pets||[]).indexOf(k.pet) >= 0) ? k.pet
+                     : ((k && (k.pets||[])[0]) || '');
+function petStats(st){
+  const t = now(), c = x => Math.max(0, Math.min(100, Math.round(x)));
+  if(!st) return {hunger:100, happy:100, clean:100, care:0};
+  return {hunger: c(100 - (t - Number(st.f||t))/FEED_MS*100),
+          happy:  c(100 - (t - Number(st.p||t))/PLAY_MS*100),
+          clean:  c(100 - (t - Number(st.w||t))/WASH_MS*100),
+          care:   Number(st.c||0)};
+}
+const petStage = care => care >= 70 ? 2 : care >= 25 ? 1 : 0;
+function petMood(S3){
+  if(timeBand() === 'night') return 'sleep';
+  const low = Math.min(S3.hunger, S3.happy, S3.clean);
+  return low >= 60 ? 'happy' : low >= 30 ? 'ok' : 'sad';
+}
+function petSay(S3, mood){
+  if(mood === 'sleep') return 'หลับอยู่… เจอกันพรุ่งนี้เช้านะ 💤';
+  if(S3.hunger < 30) return 'ท้องร้องแล้ว หิวมาก ๆ 🍖';
+  if(S3.clean  < 30) return 'ตัวเลอะไปหมดเลย ขออาบน้ำหน่อย 🧼';
+  if(S3.happy  < 30) return 'เหงาจัง มาเล่นด้วยกันหน่อย 🎾';
+  if(S3.hunger < 60) return 'เริ่มหิวนิด ๆ แล้วนะ';
+  if(S3.happy  < 60) return 'อยากเล่นแล้ว!';
+  return 'สบายใจสุด ๆ ขอบคุณที่ดูแลนะ 💛';
+}
+/* บันทึกสถานะสัตว์ตัวที่กำลังเลี้ยง */
+async function petSave(kidId, patch, careAdd){
+  const k = kidById(kidId); if(!k) return;
+  const e = activePet(k); if(!e) return;
+  const cur = (k.petst && k.petst[e]) || {f:now(), p:now(), w:now(), c:0, b:now()};
+  const nx = Object.assign({}, cur, patch, {c: Number(cur.c||0) + (careAdd||0)});
+  const before = petStage(Number(cur.c||0)), after = petStage(nx.c);
+  // เขียนทั้ง map ไม่ใช้ dot-notation เพราะคีย์เป็นอีโมจิ — Firestore ไม่รับ field path แบบนั้น
+  const map = Object.assign({}, k.petst || {}); map[e] = nx;
+  await updateDoc(dref('kids', kidId), {petst: map, pet: e});
+  if(after > before){
+    celebrate(2);
+    toast(`⚡ ${petBy(e).n} วิวัฒนาการเป็น "${STAGE[after].th}" แล้ว! 🎉`);
+  }
+}
+function petAct(what){
+  const k = kidById(view.kidId); if(!k) return;
+  const e = activePet(k);
+  if(!e){ toast('ยังไม่มีสัตว์เลี้ยงเลย — ทำงานให้ตรงเวลาเพื่อฟักไข่ก่อนนะ'); return; }
+  const S3 = petStats(petStOf(k) || (k.petst||{})[e]);
+  if(timeBand() === 'night' && what !== 'treat'){ toast('ตอนนี้หลับอยู่ ปลุกไม่ได้นะ 💤'); return; }
+  if(what === 'feed'){
+    if(S3.hunger >= 75){ toast('อิ่มอยู่แล้ว ยังไม่หิวเลย'); return; }
+    sfx('coin'); boom(18,.6); petSave(k.id, {f:now()}, 1);
+    toast('อร่อยจัง! 🍖'); return;
+  }
+  if(what === 'play'){
+    if(S3.happy >= 80){ toast('เพิ่งเล่นไป ยังสนุกอยู่เลย'); return; }
+    sfx('done'); boom(22,.7); petSave(k.id, {p:now()}, 1);
+    toast('สนุกมาก! 🎾'); return;
+  }
+  if(what === 'wash'){
+    if(S3.clean >= 80){ toast('ยังสะอาดอยู่เลย'); return; }
+    sfx('coin'); boom(18,.6); petSave(k.id, {w:now()}, 1);
+    toast('ตัวหอมแล้ว! 🧼'); return;
+  }
+  if(what === 'treat'){
+    const cost = Number(cfg().treatCost === undefined ? 3 : cfg().treatCost);
+    const max  = Number(cfg().treatMax  === undefined ? 2 : cfg().treatMax);
+    const used = S.log.filter(l => l.kidId===k.id && l.kind==='treat' && l.ts >= dayStartTs()).length;
+    if(max && used >= max){ toast(`วันนี้ให้ขนมครบ ${max} ครั้งแล้ว พรุ่งนี้ค่อยให้ใหม่นะ`); return; }
+    if(available(k.id,'daily') < cost){ toast(`ขนมใช้ ${cost} แต้ม — แต้มยังไม่พอ`); return; }
+    openConfirm('ให้ขนม 🍰', `ใช้ ${cost} แต้ม แลกขนมพิเศษ — ${petBy(e).n} จะอิ่มเต็มและมีความสุขขึ้นเยอะ`,
+      async () => {
+        try{
+          await addLog(logEntry(k.id, 'treat', `ขนมให้ ${petBy(e).n}`, '🍰', -cost, {pot:'daily'}));
+          await petSave(k.id, {f:now(), p:Math.min(now(), Number(((k.petst||{})[e]||{}).p||now()) + PLAY_MS*0.3)}, 2);
+          celebrate(1); toast('อร่อยที่สุดเลย! 🍰');
+        }catch(err){ fail(err); }
+      });
+    return;
+  }
+}
+async function petChoose(e){
+  const k = kidById(view.kidId); if(!k) return;
+  if((k.pets||[]).indexOf(e) < 0) return;
+  const has = (k.petst||{})[e];
+  try{
+    const map = Object.assign({}, k.petst || {});
+    if(!has) map[e] = {f:now(), p:now(), w:now(), c:0, b:now()};
+    await updateDoc(dref('kids', k.id), {pet:e, petst:map});
+    sfx('done'); toast(`มาเลี้ยง ${petBy(e).n} แล้ว!`);
+  }catch(err){ fail(err); }
+}
+
 /* ---------- 🥚 การ์ดไข่ + คอกสัตว์เลี้ยง ---------- */
 function petCard(k){
   const warm = Number(k.eggWarm||0), need = eggNeed(k), pct = eggPct(k);
@@ -1674,8 +2133,76 @@ function petCard(k){
         <span class="tag tag-cost">${warm}/${need}</span></div>
       <div class="muted" style="font-size:12px">${say}</div>
       <div class="petbar"><i style="width:${pct}%"></i></div>
-      ${pets.length ? `<div class="pets">${pets.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
+      ${pets.length ? `<div class="pets">${pets.map(x => {
+        const P = petBy(x), R = RARITY[P.r];
+        return `<span class="pet r${P.r}" style="--rc:${R.c}" title="${esc(P.n)} ${esc(P.th)} · ${R.k}"
+          >${petImg(x, 24)}</span>`; }).join('')}</div>
+        <div class="muted" style="font-size:11px;margin-top:4px">เก็บได้ ${pets.length}/${PETS.length} ตัว</div>` : ''}
     </div></div>`;
+}
+/* ---------- 🎮 หน้าเลี้ยงสัตว์แบบทามาก็อตจิ ---------- */
+function petHome(k){
+  const e = activePet(k);
+  if(!e) return `<div class="card" style="text-align:center;padding:26px">
+    <div class="egg w1" style="font-size:56px">🥚</div>
+    <b style="display:block;margin-top:10px">ยังไม่มีเพื่อนเลย</b>
+    <div class="muted" style="margin-top:6px">ทำงานให้ตรงเวลา ไข่จะค่อย ๆ อุ่นขึ้นแล้วฟักออกมาเอง</div></div>`;
+  const P = petBy(e), R = RECIPE[e] || {h:'forest'};
+  const st = (k.petst||{})[e], S3 = petStats(st), mood = petMood(S3), stg = petStage(S3.care);
+  const night = timeBand() === 'night';
+  const bar = (ico, lab, v, col) => `<div class="stat">
+    <span class="stat-i">${ico}</span>
+    <div style="flex:1"><div class="row-between"><small>${lab}</small><small>${v}%</small></div>
+      <div class="sbar"><i style="width:${v}%;background:${v<30?'var(--warn)':v<60?'var(--gold)':col}"></i></div></div></div>`;
+  const cost = Number(cfg().treatCost === undefined ? 3 : cfg().treatCost);
+  const max  = Number(cfg().treatMax  === undefined ? 2 : cfg().treatMax);
+  const used = S.log.filter(l => l.kidId===k.id && l.kind==='treat' && l.ts >= dayStartTs()).length;
+  const btn = (id, ico, lab, on, note) => `<button class="care ${on?'':'off'}" ${on?'':'disabled'}
+    onclick="petAct('${id}')"><span>${ico}</span><b>${lab}</b>${note?`<small>${note}</small>`:''}</button>`;
+  return `<div class="stage">
+      ${scene(R.h, mood)}
+      <div class="pethere">${petArt(e, stg)
+        ? `<img class="petpic s${stg} ${mood==='sleep'?'sleeping':''}" src="${petArt(e, stg)}" alt="${esc(P.n)}">`
+        : petSVG(e, mood, stg, mood==='sleep'?'sleeping':'')}</div>
+      <div class="bubble ${mood==='sad'?'warn':''}">${esc(petSay(S3, mood))}</div>
+    </div>
+    <div class="card" style="margin-top:0;border-radius:0 0 18px 18px">
+      <div class="row-between" style="margin-bottom:8px">
+        <b>${esc(P.n)} <span class="muted" style="font-weight:600">· ${esc(P.th)}</span></b>
+        <span class="tag ${stg===2?'tag-plus':'tag-cost'}">${STAGE[stg].th}</span></div>
+      ${bar('🍖','อิ่ม',   S3.hunger,'var(--good)')}
+      ${bar('😄','สนุก',   S3.happy, 'var(--good)')}
+      ${bar('🧼','สะอาด', S3.clean, 'var(--good)')}
+      <div class="muted" style="font-size:11px;margin-top:6px">ดูแลไปแล้ว ${S3.care} ครั้ง${
+        stg<2?` · อีก ${(stg===0?25:70)-S3.care} ครั้งจะวิวัฒนาการ`:' · ร่างสมบูรณ์แล้ว'}</div>
+      <div class="carerow">
+        ${btn('feed','🍖','ให้อาหาร', !night && S3.hunger < 75, 'ฟรี')}
+        ${btn('play','🎾','เล่นด้วย', !night && S3.happy  < 80, 'ฟรี')}
+        ${btn('wash','🧼','อาบน้ำ',  !night && S3.clean  < 80, 'ฟรี')}
+        ${btn('treat','🍰','ขนม', (!max || used < max) && available(k.id,'daily') >= cost,
+              max ? `${cost} แต้ม · ${max-used}/${max}` : `${cost} แต้ม`)}
+      </div>
+      ${night ? '<div class="muted" style="margin-top:8px">🌙 กลางคืนเขาหลับ — กลับมาดูแลตอนเช้านะ (ให้ขนมได้อย่างเดียว)</div>' : ''}
+    </div>`;
+}
+/* คอกสัตว์เต็ม ๆ — โชว์ตัวที่ยังไม่ได้เป็นเงาดำ ให้เด็กเห็นว่ายังมีอะไรรออยู่ */
+function petZoo(k){
+  const owned = Array.isArray(k.pets) ? k.pets : [];
+  const rows = [2,1,0].map(r => {
+    const list = PETS.filter(x => x.r === r);
+    return `<div class="sec-title" style="color:${RARITY[r].c}">${
+      r===2?'✨ ตำนาน':r===1?'⭐ หายาก':'ธรรมดา'} — ได้ ${
+      list.filter(x=>owned.indexOf(x.e)>=0).length}/${list.length}</div>
+      <div class="zoo">${list.map(x => {
+        const got = owned.indexOf(x.e) >= 0, live = got && x.e === activePet(k);
+        return `<div class="zoocell ${got?'':'locked'} ${live?'live':''}" style="--rc:${RARITY[r].c}"
+          ${got?`onclick="petChoose('${x.e}')"`:''}>
+          <div class="zoopic">${got ? (petArt(x.e, 2) ? petImg(x.e, 34, 2) : petSVG(x.e,'happy',2))
+                                    : '<span style="font-size:30px">❔</span>'}</div>
+          <b>${got ? esc(x.n) : '???'}</b>
+          <small>${live ? '● กำลังเลี้ยง' : got ? esc(x.th) : ''}</small></div>`; }).join('')}</div>`;
+  }).join('');
+  return `<div class="card">${rows}</div>`;
 }
 
 /* ---------- 🏦 หน้าธนาคารของเด็ก ---------- */
@@ -2440,6 +2967,22 @@ function parentManage(){
         กดงานเสร็จ → กระดาษโปรย + เสียงสั้น ๆ · <b>เลเวลกับฉายา</b> โตจากแต้มที่หาได้ตลอดกาล (ใช้แต้มไปแล้วเลเวลไม่ลด)
         · <b>ไข่</b> อุ่นขึ้นจาก "ตรงเวลา" เท่านั้น (ตรงเวลา +${WARM_ONTIME} · ครบทั้งวัน +${WARM_PERFECT})
         ซื้อด้วยแต้มไม่ได้ ยืมไม่ได้ แลกไม่ได้ — ฟองแรกใช้ ${eggNeed({})} หน่วย (~3 วัน) ฟองถัด ๆ ไปเพิ่มทีละ 60</div>
+      <div class="row-between" style="margin-top:12px">
+        <span>🍰 ขนมสัตว์เลี้ยง (ราคา / ต่อวัน)</span>
+        <button class="btn-sm" onclick="editBankNum('treatCost','ขนม 1 ชิ้นใช้กี่แต้ม',0,50)">${
+          c.treatCost===undefined?3:c.treatCost} แต้ม</button>
+        <button class="btn-sm" onclick="editBankNum('treatMax','ให้ขนมได้วันละกี่ครั้ง (0 = ไม่จำกัด)',0,10)">${
+          c.treatMax===undefined?2:c.treatMax} ครั้ง</button></div>
+      <div class="muted" style="margin-top:8px">อาหาร/เล่น/อาบน้ำ <b>ฟรีเสมอ</b> — สัตว์จะไม่มีวันตาย แค่หิวหรือง่วง
+        · ขนมเป็นทางเลือกที่ใช้แต้ม ช่วยดูดแต้มส่วนเกินออกจากระบบ (ค่าเริ่ม 3 แต้ม × 2 ครั้ง = 6 แต้ม/วัน)</div>
+      <div class="row-between" style="margin-top:12px">
+        <span>🐾 รูปสัตว์เลี้ยง</span>
+        <button class="btn-sm" onclick="openPetArt()">${(() => {
+          const n = PETS.filter(x => hasArt(x.e)).length;
+          return n ? 'แก้รูป (' + n + '/' + PETS.length + ' ตัว)' : 'ใช้ภาพวาดในแอปอยู่'; })()}</button></div>
+      <div class="muted" style="margin-top:8px">แนบรูปของตัวเองได้ <b>ตัวละ 3 ร่าง</b> (ย่อเหลือ 160px เก็บในฐานข้อมูลของบ้านเราเอง)
+        — เอารูปมาจากไหนก็ได้ที่มีสิทธิ์ใช้ เช่น วาดเอง / ให้ AI สร้าง / ชุดภาพฟรีสัญญาอนุญาตเปิด
+        · ไม่แนบก็ใช้ภาพวาดในแอปไปเลย</div>
       <div class="sec-title" style="margin:16px 0 8px">🏦 ธนาคารแต้ม</div>
       <div class="switch">
         <button class="${c.bankOn!==false?'on':''}" onclick="setOpt('bankOn',true)">เปิดใช้</button>
@@ -2624,6 +3167,93 @@ function editGiveCap(){
     fields:[{key:'n', label:'แต้มต่อคนต่อวัน (0 = ไม่จำกัด)', type:'number', value:cfg().maxGiveDay||0}],
     async onSave(v){ const n = parseInt(v.n,10); await setOpt('maxGiveDay', isNaN(n)||n<0?0:n); }});
 }
+/* ---------- 🐾 แนบรูปสัตว์เอง (3 ร่างต่อ 1 ตัว) ----------
+   ย่อเหลือ 160px · PNG พื้นโปร่งถ้าไม่เกิน ~19KB ไม่งั้นตกไปเป็น JPEG พื้นขาว · เต็มที่ 21 ตัว × 3 ร่าง = 63 รูป
+   แยกเก็บ 3 เอกสารตามระดับหายาก เอกสารละ ~300–430KB ยังห่างเพดาน 1MB ต่อเอกสารของ Firestore */
+const ART_PX = 160, ART_Q = 0.72, ART_MAX = 800000, ART_PNG_MAX = 26000;
+function openPetArt(){ modal = {kind:'petart', r:0}; renderModal(); }
+function petArtTier(r){ modal = {kind:'petart', r:Number(r)}; renderModal(); }
+/* ย่อเป็นสี่เหลี่ยมจัตุรัส ตัดขอบจากกลางภาพ
+   เก็บเป็น PNG ก่อน เพราะพื้นโปร่งใสจะวางทับฉากได้สวย — ถ้าไฟล์ใหญ่เกินค่อยอัดเป็น JPEG (พื้นขาว) */
+function shrinkImg(file){
+  return new Promise((res, rej) => {
+    const rd = new FileReader();
+    rd.onerror = () => rej(new Error('อ่านไฟล์ไม่ได้'));
+    rd.onload = () => {
+      const img = new Image();
+      img.onerror = () => rej(new Error('เปิดรูปไม่ได้'));
+      img.onload = () => {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = ART_PX;
+        const ctx = cv.getContext('2d'), sz = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width-sz)/2, (img.height-sz)/2, sz, sz, 0, 0, ART_PX, ART_PX);
+        const png = cv.toDataURL('image/png');
+        if(png.length <= ART_PNG_MAX) return res(png);
+        ctx.globalCompositeOperation = 'destination-over';   // รองพื้นขาวใต้ภาพ เพราะ JPEG ไม่มีพื้นโปร่ง
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, ART_PX, ART_PX);
+        res(cv.toDataURL('image/jpeg', ART_Q));
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+/* ขนาดโดยประมาณของเอกสารระดับนั้น หลังใส่รูปชุดใหม่ลงไปแล้ว */
+function artDocBytes(r, add){
+  const A = artAll(), nx = add || {}; let n = 0;
+  Object.keys(A).forEach(k => {
+    if(petBy(String(k).split('|')[0]).r !== r) return;
+    if(Object.prototype.hasOwnProperty.call(nx, k)) return;
+    n += k.length + String(A[k] || '').length;
+  });
+  Object.keys(nx).forEach(k => { n += k.length + String(nx[k] || '').length; });
+  return n;
+}
+async function saveArt(emo, patch){
+  const r = petBy(emo).r, sz = artDocBytes(r, patch);
+  if(sz > ART_MAX)
+    return toast('รูประดับนี้เต็มแล้ว (~' + Math.round(sz/1024) + 'KB) — เอารูปตัวอื่นออกก่อน');
+  try{
+    await setDoc(doc(db, 'families', base, 'config', ART_DOC[r] || 'petart'), patch, {merge:true});
+    toast('บันทึกรูปแล้ว'); renderModal();
+  }catch(e){ fail(e); }
+}
+/* แนบทีละร่าง */
+function pickPetArt(emo, st){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if(!f) return;
+    try{ await saveArt(emo, {[artKey(emo, Number(st) || 0)]: await shrinkImg(f)}); }
+    catch(e){ toast(e.message || 'เปิดรูปไม่ได้'); }
+  };
+  inp.click();
+}
+/* แนบ 3 ร่างรวดเดียว — เรียงไฟล์ตามชื่อ แล้วไล่ใส่ ร่าง 1 → 2 → 3 */
+function pickPetArt3(emo){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+  inp.onchange = async () => {
+    const fs = Array.from(inp.files || []).sort((a,b) => a.name.localeCompare(b.name)).slice(0,3);
+    if(!fs.length) return;
+    try{
+      const patch = {};
+      for(let i = 0; i < fs.length; i++) patch[artKey(emo, i)] = await shrinkImg(fs[i]);
+      await saveArt(emo, patch);
+    }catch(e){ toast(e.message || 'เปิดรูปไม่ได้'); }
+  };
+  inp.click();
+}
+async function clearPetArt(emo){
+  const r = petBy(emo).r, patch = {[emo]: ''};
+  STAGE_N.forEach(s => { patch[artKey(emo, s)] = ''; });
+  try{
+    await setDoc(doc(db, 'families', base, 'config', ART_DOC[r] || 'petart'), patch, {merge:true});
+    // ตัวหายาก/ตำนานอาจมีคีย์แบบเก่าค้างอยู่ในเอกสาร petart ต้องล้างด้วย
+    if(r) await setDoc(doc(db, 'families', base, 'config', 'petart'), {[emo]: ''}, {merge:true});
+    toast('กลับไปใช้อีโมจิแล้ว'); renderModal();
+  }catch(e){ fail(e); }
+}
 function editUrgentMin(){
   openForm({title:'เข้าโหมดด่วนเมื่อเหลือกี่นาที',
     fields:[{key:'n', label:'นาที (0 = ไม่มีโหมดด่วน)', type:'number',
@@ -2682,6 +3312,36 @@ function renderModal(){
           ${available(modal.kid.id, modal.pot) >= r.cost ? '' : 'disabled'} onclick="shareAlone('${r.id}')">
           จ่ายเต็ม ${r.cost} แต้ม${available(modal.kid.id, modal.pot) >= r.cost ? '' : ' (แต้มยังไม่พอ)'}</button>
         <div class="sheet-actions"><button onclick="closeModal()">ยกเลิก</button></div>
+      </div></div>`;
+    return;
+  }
+  if(modal.kind === 'petart'){
+    const r = Number(modal.r||0), list = PETS.filter(x => x.r === r);
+    m.innerHTML = `<div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="sheet">
+        <h3>🐾 รูปสัตว์เลี้ยง</h3>
+        <div class="muted" style="margin-bottom:10px">แนบรูปได้ <b>ตัวละ 3 ร่าง</b> — แตะช่อง 1/2/3 เพื่อใส่ทีละร่าง
+          หรือแตะ “ใส่ 3 ร่าง” แล้วเลือก 3 ไฟล์พร้อมกัน (เรียงตามชื่อไฟล์)
+          · ร่างไหนยังว่าง จะยืมร่างที่ใกล้ที่สุดมาใช้ก่อน</div>
+        <div class="switch">${[2,1,0].map(t => `<button class="${r===t?'on':''}"
+          onclick="petArtTier(${t})">${t===2?'✨ ตำนาน':t===1?'⭐ หายาก':'ธรรมดา'}</button>`).join('')}</div>
+        <div class="muted" style="margin-top:8px;font-size:11px">ใช้พื้นที่ระดับนี้ ~${
+          Math.round(artDocBytes(r)/1024)}KB / 800KB</div>
+        <div class="zoo" style="margin-top:8px">${list.map(x => `
+          <div class="zoocell" style="--rc:${RARITY[x.r].c}">
+            <div class="zoopic">${petArt(x.e, 2) ? petImg(x.e, 34, 2) : petSVG(x.e,'happy',2)}</div>
+            <b>${esc(x.n)}</b><small>${esc(x.th)}</small>
+            <div class="artslots">${STAGE_N.map(s => { const v = artRaw(x.e, s); return `
+              <div class="artslot ${v?'has':''}" title="${esc(STAGE[s].th)}"
+                   onclick="pickPetArt('${x.e}',${s})">
+                ${v ? `<img src="${v}" alt="">` : '<span class="ph">＋</span>'}
+                <small>${s+1}</small></div>`; }).join('')}</div>
+            <button class="btn-ghost btn-sm" style="margin-top:4px;font-size:10px"
+              onclick="pickPetArt3('${x.e}')">ใส่ 3 ร่าง</button>
+            ${hasArt(x.e) ? `<button class="btn-ghost btn-sm" style="margin-top:3px;font-size:10px"
+              onclick="clearPetArt('${x.e}')">เอาออก</button>` : ''}
+          </div>`).join('')}</div>
+        <div class="sheet-actions"><button onclick="closeModal()">ปิด</button></div>
       </div></div>`;
     return;
   }
@@ -3028,7 +3688,7 @@ function delItem(list, id){
    เชื่อมต่อ Firestore
    ============================================================ */
 function watch(){
-  const empty = {settings:Object.assign({}, DEF_SETTINGS), kids:[], chores:[], penalties:[], rewards:[], pending:[], log:[]};
+  const empty = {settings:Object.assign({}, DEF_SETTINGS), kids:[], chores:[], penalties:[], rewards:[], pending:[], log:[], petart:{}};
   S = S || empty;
   const mark = n => { ready[n] = true; if(Object.keys(ready).length >= 7) render(); };
 
@@ -3045,6 +3705,13 @@ function watch(){
   });
   // เรียงใหม่ฝั่งเครื่องด้วย เผื่อเวลาชนกันเป๊ะ ๆ จะได้ลำดับคงที่ทุกเครื่อง
   const newestFirst = (a,b) => (b.ts - a.ts) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+  // รูปสัตว์แยก 3 เอกสารตามระดับหายาก — รวมเป็นแมพเดียวใน S.petart (เอกสารระดับสูงกว่าทับคีย์แบบเก่า)
+  const artDocs = {};
+  ART_DOC.forEach(name => unsubs.push(onSnapshot(doc(db, 'families', base, 'config', name), d => {
+    artDocs[name] = d.exists() ? (d.data() || {}) : {};
+    S.petart = Object.assign.apply(null, [{}].concat(ART_DOC.map(n => artDocs[n] || {})));
+    render();
+  }, e => console.error(e))));
   unsubs.push(onSnapshot(query(col('pending'), orderBy('ts','desc')), snap => {
     S.pending = snap.docs.map(d => d.data()).sort(newestFirst); mark('pending'); render();
   }, e => console.error(e)));
@@ -3203,6 +3870,7 @@ async function seedOrMigrate(){
     await b.commit();
   }
   if(cur.soundOn === undefined) await updateDoc(settingsRef(), {soundOn:true, funV1:true});
+  if(cur.treatCost === undefined) await updateDoc(settingsRef(), {treatCost:3, treatMax:2, tamaV1:true});
   if(!cur.morningV3){         // ยุบชุดเช้าเหลืองานเดียว 10 แต้ม (อาบน้ำ + แปรงฟัน + แต่งตัว)
     const NAME = 'อาบน้ำ แปรงฟัน แต่งตัวเสร็จ';
     const OLD = {'อาบน้ำเสร็จ':1, 'อาบน้ำแต่งตัวเสร็จ':1};   // ชื่อจากทุกรุ่นก่อนหน้า
@@ -3406,7 +4074,7 @@ onAuthStateChanged(auth, async user => {
 Object.assign(window, {
   askPin, pinTap, pinDel, go, setTab, doChore, redeem, shareWith, shareAlone, giveAll,
   approve, reject, markParent, giveChore, applyPenalty, applyPenaltyAll, openAdjust, undoLog,
-  openGive, giveForm, joinShare,
+  openGive, giveForm, joinShare, petAct, petChoose, openPetArt, petArtTier, pickPetArt, pickPetArt3, clearPetArt,
   openDeposit, withdrawDep, askEarly, openLoan, payLoanAll, editBankNum, editBankTier,
   cosignWith, seizeCollateral,
   editKid, editItem, delItem, setOpt, editBonus, editGiveCap, editUrgentMin, editAutoSec, editIdleSec,
