@@ -143,6 +143,32 @@
   .cd.hot .cd-bar i{background:var(--warn)}
   @keyframes cdPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.015)}}
   @media (prefers-reduced-motion:reduce){ .cd.warn,.cd.hot{animation:none} }
+  /* ---------- 🎮 โหมดสนุก ---------- */
+  .flash-emo{animation:pop .55s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes pop{0%{transform:scale(.2) rotate(-18deg);opacity:0}
+                 60%{transform:scale(1.18) rotate(6deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+  .lvbadge{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.22);
+    border-radius:999px;padding:2px 9px;font-size:12px;font-weight:800}
+  .petcard{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;
+    background:linear-gradient(135deg,var(--gold-soft),var(--card));border:2px solid var(--gold)55;margin-bottom:12px}
+  .egg{font-size:40px;line-height:1;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.15))}
+  .egg.w1{animation:eggTilt 2.6s ease-in-out infinite}
+  .egg.w2{animation:eggTilt 1.1s ease-in-out infinite}
+  .egg.w3{animation:eggShake .42s ease-in-out infinite}
+  @keyframes eggTilt{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+  @keyframes eggShake{0%,100%{transform:translateX(-3px) rotate(-11deg)}
+                      50%{transform:translateX(3px) rotate(11deg)}}
+  .petbar{height:12px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:6px}
+  .petbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold),var(--good));
+    transition:width .6s cubic-bezier(.2,.9,.3,1)}
+  .pets{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .pets span{font-size:22px;line-height:1;animation:petIn .45s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes petIn{0%{transform:scale(0) rotate(-30deg)}100%{transform:scale(1) rotate(0)}}
+  .xpbar{height:7px;border-radius:99px;background:rgba(255,255,255,.28);overflow:hidden;margin-top:5px}
+  .xpbar i{display:block;height:100%;background:#fff;opacity:.9;transition:width .6s}
+  @media (prefers-reduced-motion:reduce){
+    .flash-emo,.pets span{animation:none} .egg.w1,.egg.w2,.egg.w3{animation:none}
+  }
   .daybox{flex:1;text-align:center;font-size:10px;color:var(--muted)}
   .daybox b{display:block;height:22px;border-radius:7px;line-height:22px;font-size:11px;color:#fff;margin-bottom:2px}
   .daypick{display:flex;gap:5px;margin-top:6px}
@@ -283,10 +309,47 @@ const KID_COLORS = ['#4a6491','#7d9bc1','#bd6b57','#c9973f','#4f8172','#8b7fa8',
                     '#3e8e9c','#c07b8f','#7d8b52','#6b5b95','#d08a4e','#5a7d9a'];
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
+/* ============================================================
+   🎮 โหมดสนุก — ฉลอง / เลเวล+ฉายา / ไข่ฟักเป็นสัตว์เลี้ยง
+   ออกแบบสำหรับเด็ก 5–8 ขวบ: เห็นผลทันที เข้าใจโดยไม่ต้องอ่าน
+   ============================================================ */
+/* ฉายาไล่ระดับ — ต้องขึ้นถี่ช่วงแรกให้ติดใจ แล้วค่อยห่างขึ้น
+   รายได้จริง ~650 แต้ม/สัปดาห์ → Lv2 ครึ่งสัปดาห์ · Lv5 ~1 เดือน · Lv10 ~5 เดือน */
+const LEVELS = [
+  {xp:0,     emo:'🐣', name:'ลูกเจี๊ยบหัดบิน'},
+  {xp:300,   emo:'🐥', name:'นักสำรวจตัวน้อย'},
+  {xp:800,   emo:'🦊', name:'จอมวางแผน'},
+  {xp:1500,  emo:'🐯', name:'นักสู้ตัวจิ๋ว'},
+  {xp:2500,  emo:'🦉', name:'ผู้รอบรู้'},
+  {xp:4000,  emo:'🦅', name:'นักบินความเร็วสูง'},
+  {xp:6000,  emo:'🐉', name:'มังกรน้อย'},
+  {xp:8500,  emo:'🦁', name:'ราชสีห์แห่งวินัย'},
+  {xp:11500, emo:'🌟', name:'ดาวประจำบ้าน'},
+  {xp:15000, emo:'👑', name:'ตำนานแห่งบ้าน'}
+];
+const XP_STEP = 5000;                       // เลย Lv10 ไปแล้ว เพิ่มทีละเท่านี้
+function levelOf(xp){
+  xp = Math.max(0, Number(xp)||0);
+  let i = 0;
+  for(let j=0;j<LEVELS.length;j++) if(xp >= LEVELS[j].xp) i = j;
+  if(xp < LEVELS[LEVELS.length-1].xp) 
+    return {lv:i+1, at:LEVELS[i].xp, next:LEVELS[i+1].xp, emo:LEVELS[i].emo, name:LEVELS[i].name};
+  const over = Math.floor((xp - LEVELS[9].xp) / XP_STEP);
+  return {lv:10+over, at:LEVELS[9].xp + over*XP_STEP, next:LEVELS[9].xp + (over+1)*XP_STEP,
+          emo:'👑', name:'ตำนานแห่งบ้าน'};
+}
+/* สัตว์เลี้ยงที่ฟักออกมาได้ — สุ่มตอนไข่แตก ยิ่งฟักหลายฟองยิ่งเจอตัวหายาก */
+const PETS = ['🐤','🐢','🐰','🐹','🐧','🦔','🐨','🦊','🐼','🦄','🐉','🦖','🐙','🦩','🦥'];
+/* ไข่ต้องการ "ความอบอุ่น" — ได้จากการทำงานตรงเวลาเท่านั้น ซื้อด้วยแต้มไม่ได้
+   ตรงเวลา 1 อย่าง = +3 · ทำครบทั้งวัน = +10 → วันละ ~34 → ฟองแรกแตกใน ~3 วัน */
+const WARM_ONTIME = 3, WARM_PERFECT = 10;
+const eggNeed = k => 75 + (Array.isArray(k && k.pets) ? k.pets.length : 0) * 60;
+const eggPct  = k => Math.min(100, Math.round(Number((k||{}).eggWarm||0) / eggNeed(k) * 100));
+
 const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, perfectBonus:20,
                       autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60,
                       rewardsV4:true, eveningV1:true, potFixV1:true, parentPin:'1234',
-                      shareSmallV1:true, rewardsV5:true, maxGiveDay:50,
+                      shareSmallV1:true, rewardsV5:true, funV1:true, soundOn:true, maxGiveDay:50,
                       /* ---- 🏦 ธนาคารแต้ม ----
                          ตัวเลขชุดนี้คุมไม่ให้แต้มเฟ้อ: ดอกฝากผลิตแต้มใหม่ได้สูงสุด
                          🎈 200×10%/14วัน = 10/สัปดาห์ (2.5% ของรายได้ 400)
@@ -758,14 +821,48 @@ function logEntry(kidId, kind, name, emo, delta, extra){
 async function addLog(entry){
   const b = writeBatch(db);
   b.set(dref('log', entry.id), entry);
-  if(entry.delta){
-    const f = POT_FIELD[entry.pot || 'daily'];
-    b.update(dref('kids', entry.kidId), {[f]: increment(Number(entry.delta))});
-  }
+  const d = Number(entry.delta), earn = d > 0 && (entry.kind === 'chore' || entry.kind === 'bonus');
+  const u = {};
+  if(d) u[POT_FIELD[entry.pot || 'daily']] = increment(d);
+  // XP สะสมตลอดกาล — ใช้แต้มไปแล้วก็ไม่ลด เลเวลจึงไม่มีวันถอยหลัง
+  if(earn) u.xp = increment(d);
+  // ความอบอุ่นของไข่ — ได้จาก "ตรงเวลา" เท่านั้น ซื้อไม่ได้ แลกไม่ได้
+  const warm = entry.kind === 'bonus' ? WARM_PERFECT
+             : (entry.kind === 'chore' && entry.status === 'ontime') ? WARM_ONTIME : 0;
+  if(warm) u.eggWarm = increment(warm);
+  // อ่านค่าก่อนเขียน — หลัง commit แล้ว S อาจอัปเดตหรือยังไม่อัปเดตก็ได้ (snapshot มาไม่แน่นอน)
+  // ถ้าไปอ่านทีหลังจะนับซ้ำหรือหลุดได้ จึงล็อกค่าตั้งต้นไว้ตรงนี้เลย
+  const k0 = kidById(entry.kidId) || {};
+  const xp0 = Number(k0.xp || 0), warm0 = Number(k0.eggWarm || 0);
+  if(Object.keys(u).length) b.update(dref('kids', entry.kidId), u);
   await b.commit();
+  if(earn) await afterEarn(entry.kidId, xp0, d, warm0, warm);
   // ได้แต้มประจำวันมาใหม่ → หักใช้หนี้อัตโนมัติทันที (bankCommit ไม่วิ่งผ่านตรงนี้ จึงไม่วน)
-  if(bankOn() && (entry.pot||'daily') === 'daily' && Number(entry.delta) > 0)
-    await autoRepay(entry.kidId, Number(entry.delta));
+  if(bankOn() && (entry.pot||'daily') === 'daily' && d > 0)
+    await autoRepay(entry.kidId, d);
+}
+/* หลังได้แต้ม: เช็กเลเวลอัพ แล้วเช็กไข่แตก (S ยังไม่ทันอัปเดตจาก snapshot จึงคำนวณจากค่าก่อนหน้า + ที่เพิ่งได้) */
+async function afterEarn(kidId, xp0, gained, warm0, warm){
+  if(levelOf(xp0 + gained).lv > levelOf(xp0).lv){
+    const L = levelOf(xp0 + gained);
+    cheer.push({lv:2, emo:L.emo, title:`เลเวลอัพ! Lv.${L.lv}`, big:L.name, color:'var(--gold)',
+      sub:'ได้ฉายาใหม่ประจำตัวแล้ว เก่งมาก!', toast:`🎉 เลเวลอัพ! Lv.${L.lv} ${L.name}`});
+  }
+  if(warm) await checkHatch(kidId, warm0 + warm);
+}
+/* ไข่ครบความอบอุ่น → ฟักเป็นสัตว์เลี้ยงแบบสุ่ม แล้วเริ่มฟองใหม่ (ฟองถัดไปต้องการมากขึ้น) */
+async function checkHatch(kidId, warm){
+  const k = kidById(kidId); if(!k) return;
+  const need = eggNeed(k);
+  if(warm < need) return;
+  const pool = PETS.filter(x => (k.pets||[]).indexOf(x) < 0);
+  const pet = (pool.length ? pool : PETS)[(Math.random()*(pool.length||PETS.length))|0];
+  try{
+    await updateDoc(dref('kids', kidId),
+      {pets: (Array.isArray(k.pets)?k.pets:[]).concat([pet]), eggWarm: Math.max(0, warm - need)});
+    cheer.push({lv:3, emo:pet, title:'ไข่ฟักแล้ว! 🎊', big:'ได้เพื่อนใหม่', color:'var(--good)',
+      sub:'ฟักได้จากการทำงานตรงเวลาเท่านั้น ซื้อด้วยแต้มไม่ได้นะ', toast:`ไข่ฟักแล้ว! ได้ ${pet}`});
+  }catch(e){ fail(e); }
 }
 async function removeLog(entry){
   const b = writeBatch(db);
@@ -790,16 +887,95 @@ async function checkPerfectDay(kidId){
   toast(`สุดยอด! ตรงเวลาครบทุกอย่าง +${bonus} แต้มพิเศษ 🏅`);
   return true;
 }
+/* ---------- 🔊 เสียง: สังเคราะห์สดด้วย WebAudio ไม่ต้องโหลดไฟล์เสียงเลย ---------- */
+let AC = null;
+const soundOn = () => cfg().soundOn !== false;
+function tone(freq, at, dur, vol, type){
+  try{
+    if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if(AC.state === 'suspended') AC.resume();
+    const o = AC.createOscillator(), g = AC.createGain(), t0 = AC.currentTime + at;
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+  }catch(e){}
+}
+const SFX = {                              // โน้ตไล่ขึ้นทั้งหมด = ฟังแล้วรู้สึก "สำเร็จ"
+  done:  [[660,0,.14],[880,.09,.20]],
+  coin:  [[988,0,.10],[1319,.06,.16]],
+  big:   [[523,0,.14],[659,.10,.14],[784,.20,.14],[1047,.30,.34]],
+  hatch: [[392,0,.16],[523,.12,.16],[659,.24,.16],[784,.36,.16],[1047,.48,.40]],
+  level: [[523,0,.12],[784,.10,.12],[1047,.20,.12],[1319,.30,.40]],
+  oops:  [[300,0,.16],[200,.10,.24]]
+};
+function sfx(name){
+  if(!soundOn()) return;
+  (SFX[name] || SFX.done).forEach(n => tone(n[0], n[1], n[2], .16, 'triangle'));
+}
+/* ---------- 🎉 กระดาษโปรย — วาดบน canvas ใบเดียว ไม่ขวางการกดจอ ---------- */
+let cfCanvas = null, cfParts = [], cfRunning = false;
+function boom(n, power){
+  const cv = cfCanvas || (cfCanvas = (() => {
+    const c = document.createElement('canvas');
+    c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60';
+    document.body.appendChild(c); return c;
+  })());
+  const W = cv.width = innerWidth, H = cv.height = innerHeight;
+  const COL = ['#4a6491','#c9973f','#4f8172','#bd6b57','#8b7fa8','#3e8e9c','#d08a4e'];
+  const pw = power || 1;
+  for(let i=0;i<n;i++) cfParts.push({
+    x: W/2 + (Math.random()-.5)*W*.5, y: H*.42 + (Math.random()-.5)*60,
+    vx: (Math.random()-.5)*13*pw, vy: (-7 - Math.random()*9)*pw,
+    s: 6 + Math.random()*7, r: Math.random()*Math.PI, vr: (Math.random()-.5)*.35,
+    c: COL[(Math.random()*COL.length)|0], life: 1
+  });
+  if(cfRunning) return;
+  cfRunning = true;
+  const ctx = cv.getContext('2d');
+  (function frame(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    cfParts = cfParts.filter(p => p.life > 0 && p.y < cv.height + 40);
+    cfParts.forEach(p => {
+      p.vy += .42; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.vx *= .992; p.life -= .006;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+      ctx.fillStyle = p.c; ctx.fillRect(-p.s/2, -p.s*.35, p.s, p.s*.7);
+      ctx.restore();
+    });
+    if(cfParts.length) requestAnimationFrame(frame);
+    else { ctx.clearRect(0,0,cv.width,cv.height); cfRunning = false; }
+  })();
+}
+/* ระดับการฉลอง: 1 = กดงานเสร็จ · 2 = ครบทั้งวัน/เลเวลอัพ · 3 = ไข่แตก */
+function celebrate(level){
+  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
+    sfx(level>=3?'hatch':level>=2?'level':'done'); return;
+  }
+  if(level >= 3){ boom(150, 1.25); setTimeout(() => boom(90, 1), 320); sfx('hatch'); }
+  else if(level >= 2){ boom(110, 1.1); sfx('level'); }
+  else { boom(45, .85); sfx('done'); }
+}
+
 function fail(e){ console.error(e); toast('บันทึกไม่สำเร็จ — ' + (e && e.code ? e.code : 'ลองใหม่อีกครั้ง')); }
 
 /* ============================================================
    RENDER
    ============================================================ */
 /* ---------- หน้าสรุปหลังกดเสร็จ แล้วเด้งกลับหน้าแรกให้คนถัดไป ---------- */
+/* เหตุการณ์ใหญ่ (เลเวลอัพ / ไข่แตก) เข้าคิวไว้ตรงนี้ แล้วให้หน้าสรุปหยิบไปโชว์แทนผลงานธรรมดา
+   — เด็กจะได้เห็นของที่ตื่นเต้นที่สุดเป็นพระเอก ไม่ใช่โดนหน้า "+16 แต้ม" ทับ */
+let cheer = [];
 function showFlash(o){
-  if(!cfg().autoHome){ if(o.toast) toast(o.toast); return; }
+  const top = cheer.sort((a,b) => b.lv - a.lv)[0];
+  cheer = [];
+  const small = `${o.title} ${o.big}`;
+  const view = top ? Object.assign({}, top, {extra: o.extra ? `${small} · ${o.extra}` : small}) : o;
+  celebrate(top ? top.lv : 1);
+  if(!cfg().autoHome){ if(view.toast) toast(view.toast); return; }
   clearTimeout(flashTimer);
-  flash = Object.assign({left: Number(cfg().autoHomeSec || 5)}, o);
+  flash = Object.assign({left: Number(cfg().autoHomeSec || 5) + (top ? 4 : 0)}, view);
   render();
   tickFlash();
 }
@@ -822,7 +998,7 @@ function viewFlash(){
         <div class="pt">${available(k.id)} แต้ม</div></div>
     </div>
     <div style="text-align:center;padding:20px 8px 10px">
-      <div style="font-size:66px;line-height:1">${flash.emo}</div>
+      <div class="flash-emo" style="font-size:76px;line-height:1">${flash.emo}</div>
       <h1 style="margin-top:10px">${esc(flash.title)}</h1>
       <div class="points-big" style="color:${flash.color||'var(--good)'};margin:10px 0">${esc(flash.big)}</div>
       <div class="muted" style="font-size:15px">${esc(flash.sub)}</div>
@@ -886,13 +1062,17 @@ function homeFeed(){
 
 function viewPick(){
   const tiles = S.kids.map(k => {
-    const pr = routineProgress(k.id);
+    const pr = routineProgress(k.id), L = levelOf(Number(k.xp||0));
     return `<div class="kid-tile" style="border-color:${k.color};background:${tint(k.color,0.12)}"
                  onclick="askPin('${k.id}')">
       <div style="display:flex;justify-content:center">${avatar(k, 92)}</div>
       <div class="nm" style="color:${k.color}">${esc(k.name)}</div>
+      <div class="pt" style="font-size:12px">${L.emo} Lv.${L.lv} · ${esc(L.name)}</div>
       <div class="pt">🎈 ${available(k.id,'daily')} · 💎 ${available(k.id,'extra')}</div>
       <div class="pt" style="font-size:12px">${pr.total?`วันนี้ ${todayScore(k.id).pct}%`:'วันหยุด'}</div>
+      <div class="pets" style="justify-content:center">${
+        (Array.isArray(k.pets)?k.pets:[]).slice(-6).map(x => `<span>${x}</span>`).join('')
+        || `<span style="font-size:18px;opacity:.5">🥚</span>`}</div>
     </div>`;
   }).join('');
   return `
@@ -1154,7 +1334,7 @@ function viewKid(){
     const anytime = today.filter(c => !c.due);
     const routineList = timed.filter(c => c.routine).concat(anytime.filter(c => c.routine));
     const extraList   = timed.filter(c => !c.routine).concat(anytime.filter(c => !c.routine));
-    body = todayCard(k) + waitBox
+    body = petCard(k) + todayCard(k) + waitBox
       + (routineList.length ? `<div class="sec-title">⏰ กิจวัตรวันนี้${cfg().stepOrder?' — ทำเรียงตามลำดับ':''}</div>`
           + routineList.map(c => choreRow(c,k.id)).join('') : '')
       + (extraList.length ? `<div class="sec-title">⭐ งานเสริม — ทำเพิ่มได้แต้มเพิ่ม</div>`
@@ -1227,13 +1407,16 @@ function viewKid(){
                        : '<div class="empty">ยังไม่มีประวัติ</div>';
   }
   const streak = onTimeStreak(k.id);
+  const xp = Number(k.xp||0), LV = levelOf(xp);
+  const xpPct = Math.max(3, Math.min(100, Math.round((xp - LV.at) / Math.max(1, LV.next - LV.at) * 100)));
   const resD = reserved(k.id,'daily'), resE = reserved(k.id,'extra');
   return `
     <div class="kidbar" style="background:${k.color}">
       ${avatar(k, 54)}
       <div style="flex:1;min-width:0">
-        <div class="nm">${esc(k.name)}</div>
-        <div class="pt">🎈 ${availD} · 💎 ${availE} · 🕐 ${fmtClock(now())}</div>
+        <div class="nm">${esc(k.name)} <span class="lvbadge">${LV.emo} Lv.${LV.lv}</span></div>
+        <div class="pt">${esc(LV.name)} · 🎈 ${availD} · 💎 ${availE}</div>
+        <div class="xpbar" title="XP ${xp} / ${LV.next}"><i style="width:${xpPct}%"></i></div>
       </div>
       <button onclick="go('pick')">ออก ✕</button>
     </div>
@@ -1472,6 +1655,27 @@ function doGive(kid, partner, pot, n){
       }catch(e){ fail(e); }
     }),
     `${kid.name} ใส่ PIN เพื่อยืนยันว่าจะแบ่ง ${n} แต้มให้${partner.name}`);
+}
+
+/* ---------- 🥚 การ์ดไข่ + คอกสัตว์เลี้ยง ---------- */
+function petCard(k){
+  const warm = Number(k.eggWarm||0), need = eggNeed(k), pct = eggPct(k);
+  const pets = Array.isArray(k.pets) ? k.pets : [];
+  const stage = pct >= 75 ? 3 : pct >= 40 ? 2 : 1;
+  const say = pct >= 90 ? 'ใกล้แตกแล้ว! ขยับแรงมาก 🎉'
+            : pct >= 75 ? 'ไข่สั่นแรงขึ้นเรื่อย ๆ!'
+            : pct >= 40 ? 'ได้ยินเสียงข้างในแล้วนะ'
+            : pct > 0   ? 'ไข่เริ่มอุ่นแล้ว'
+                        : 'ทำงานให้ตรงเวลา แล้วไข่จะค่อย ๆ อุ่นขึ้น';
+  return `<div class="petcard">
+    <div class="egg w${stage}">🥚</div>
+    <div style="flex:1;min-width:0">
+      <div class="row-between"><b>ไข่ใบที่ ${pets.length+1}</b>
+        <span class="tag tag-cost">${warm}/${need}</span></div>
+      <div class="muted" style="font-size:12px">${say}</div>
+      <div class="petbar"><i style="width:${pct}%"></i></div>
+      ${pets.length ? `<div class="pets">${pets.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
+    </div></div>`;
 }
 
 /* ---------- 🏦 หน้าธนาคารของเด็ก ---------- */
@@ -2228,6 +2432,14 @@ function parentManage(){
           c.maxGiveDay ? c.maxGiveDay+' แต้ม/คน' : 'ไม่จำกัด'}</button></div>
       <div class="muted" style="margin-top:8px">เด็กแบ่งแต้มให้กันได้ทั้ง 🎈 และ 💎 (ข้ามกระเป๋าไม่ได้)
         · คนให้ต้องใส่ PIN ของตัวเอง แล้วเข้าคิวรอพ่อแม่อนุมัติก่อนแต้มถึงย้าย</div>
+      <div class="sec-title" style="margin:16px 0 8px">🎮 โหมดสนุก</div>
+      <div class="switch">
+        <button class="${c.soundOn!==false?'on':''}" onclick="setOpt('soundOn',true)">🔊 เปิดเสียง</button>
+        <button class="${c.soundOn!==false?'':'on'}" onclick="setOpt('soundOn',false)">🔇 ปิดเสียง</button></div>
+      <div class="muted" style="margin-top:8px">
+        กดงานเสร็จ → กระดาษโปรย + เสียงสั้น ๆ · <b>เลเวลกับฉายา</b> โตจากแต้มที่หาได้ตลอดกาล (ใช้แต้มไปแล้วเลเวลไม่ลด)
+        · <b>ไข่</b> อุ่นขึ้นจาก "ตรงเวลา" เท่านั้น (ตรงเวลา +${WARM_ONTIME} · ครบทั้งวัน +${WARM_PERFECT})
+        ซื้อด้วยแต้มไม่ได้ ยืมไม่ได้ แลกไม่ได้ — ฟองแรกใช้ ${eggNeed({})} หน่วย (~3 วัน) ฟองถัด ๆ ไปเพิ่มทีละ 60</div>
       <div class="sec-title" style="margin:16px 0 8px">🏦 ธนาคารแต้ม</div>
       <div class="switch">
         <button class="${c.bankOn!==false?'on':''}" onclick="setOpt('bankOn',true)">เปิดใช้</button>
@@ -2990,6 +3202,7 @@ async function seedOrMigrate(){
     b.update(settingsRef(), {morningV2:true});
     await b.commit();
   }
+  if(cur.soundOn === undefined) await updateDoc(settingsRef(), {soundOn:true, funV1:true});
   if(!cur.morningV3){         // ยุบชุดเช้าเหลืองานเดียว 10 แต้ม (อาบน้ำ + แปรงฟัน + แต่งตัว)
     const NAME = 'อาบน้ำ แปรงฟัน แต่งตัวเสร็จ';
     const OLD = {'อาบน้ำเสร็จ':1, 'อาบน้ำแต่งตัวเสร็จ':1};   // ชื่อจากทุกรุ่นก่อนหน้า
