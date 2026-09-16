@@ -354,7 +354,7 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
          collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
-         increment, query, orderBy, limit, getDocs }
+         increment, query, orderBy, limit, getDocs, where, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const app  = initializeApp(firebaseConfig);
@@ -944,6 +944,9 @@ function logEntry(kidId, kind, name, emo, delta, extra){
 async function addLog(entry){
   const b = writeBatch(db);
   b.set(dref('log', entry.id), entry);
+  // Only accepted, point-earning chores grant a ticket; pending/bonus/adjust never do.
+  if(entry.kind==='chore' && Number(entry.delta)>0)
+    b.set(dref('adventureTickets',entry.id),{id:entry.id,kidId:entry.kidId,state:'ready',createdAt:entry.ts});
   const d = Number(entry.delta), earn = d > 0 && (entry.kind === 'chore' || entry.kind === 'bonus');
   const u = {};
   if(d) u[POT_FIELD[entry.pot || 'daily']] = increment(d);
@@ -992,6 +995,7 @@ async function checkHatch(kidId, warm){
 async function removeLog(entry){
   const b = writeBatch(db);
   b.delete(dref('log', entry.id));
+  if(entry.kind==='chore')b.delete(dref('adventureTickets',entry.id));
   if(entry.delta){
     const f = POT_FIELD[entry.pot || 'daily'];
     b.update(dref('kids', entry.kidId), {[f]: increment(-Number(entry.delta))});
@@ -1442,7 +1446,7 @@ function viewKid(){
   const availD = available(k.id, 'daily'), availE = available(k.id, 'extra');
   const avail = availD;
   const myPend = S.pending.filter(p => p.kidId===k.id || p.partnerId===k.id);
-  const tabs = [['chores','วันนี้'],['rewards','ของรางวัล'],['zoo','🐾 คอกสัตว์']]
+  const tabs = [['chores','วันนี้'],['rewards','ของรางวัล'],['zoo','🐾 คอกสัตว์'],['adventure','🧭 ผจญภัย']]
     .concat(bankOn() ? [['bank','🏦 ธนาคาร']] : []).concat([['history','ประวัติ']]);
   const tabBtns = tabs.map(([id,l]) => `<button class="${view.tab===id?'on':''}" onclick="setTab('${id}')">${l}</button>`).join('');
   let body = '';
@@ -1525,7 +1529,9 @@ function viewKid(){
       + `<div class="sec-title">💎 รางวัลใหญ่ — ใช้แต้มพิเศษเท่านั้น (มี ${available(k.id,'extra')}) · 🤝 = หารกันได้</div>`
       + (big.map(rewardRow).join('') || '<div class="empty">ยังไม่มีรางวัลใหญ่</div>');
   }else if(view.tab === 'zoo'){
-    body = petHome(k) + petCard(k) + petZoo(k);
+    body = petHome(k) + adventureCard(k) + petCard(k) + petZoo(k);
+  }else if(view.tab === 'adventure'){
+    body = adventureCard(k);
   }else if(view.tab === 'bank'){
     body = bankTab(k, myPend);
   }else{
@@ -3688,7 +3694,7 @@ function delItem(list, id){
    เชื่อมต่อ Firestore
    ============================================================ */
 function watch(){
-  const empty = {settings:Object.assign({}, DEF_SETTINGS), kids:[], chores:[], penalties:[], rewards:[], pending:[], log:[], petart:{}};
+  const empty = {settings:Object.assign({}, DEF_SETTINGS), kids:[], chores:[], penalties:[], rewards:[], pending:[], log:[], petart:{}, adventureTickets:[]};
   S = S || empty;
   const mark = n => { ready[n] = true; if(Object.keys(ready).length >= 7) render(); };
 
@@ -3703,6 +3709,9 @@ function watch(){
       mark(key); render();
     }, e => console.error(e)));
   });
+  unsubs.push(onSnapshot(query(col('adventureTickets'),where('state','==','ready')),snap=>{
+    S.adventureTickets=snap.docs.map(d=>({...d.data(),id:d.id}));render();
+  },e=>console.error(e)));
   // เรียงใหม่ฝั่งเครื่องด้วย เผื่อเวลาชนกันเป๊ะ ๆ จะได้ลำดับคงที่ทุกเครื่อง
   const newestFirst = (a,b) => (b.ts - a.ts) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
   // รูปสัตว์แยก 3 เอกสารตามระดับหายาก — รวมเป็นแมพเดียวใน S.petart (เอกสารระดับสูงกว่าทับคีย์แบบเก่า)
@@ -4050,7 +4059,7 @@ let lastTouch = Date.now();
 ['pointerdown','touchstart','keydown','wheel'].forEach(ev =>
   document.addEventListener(ev, () => { lastTouch = Date.now(); }, {capture:true, passive:true}));
 setInterval(() => {
-  if(!S || modal || flash) return;
+  if(!S || modal || flash || adventureOverlay) return;
   if(view.screen === 'pick') return;
   if(!cfg().idleHome) return;
   const sec = Number(cfg().idleSec || 60);
@@ -4058,10 +4067,138 @@ setInterval(() => {
   if(Date.now() - lastTouch > limit * 1000) go('pick');
 }, 5000);
 
+const ADVENTURE_GAME = "\u003c!doctype html>\u003chtml lang=\"th\">\u003chead>\u003cmeta charset=\"utf-8\">\u003cmeta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\u003cstyle>body{margin:0;font:16px system-ui;background:#fffdf7;color:#234339;color-scheme:light}button{font:inherit}\u003c/style>\u003c/head>\u003cbody>\u003cdiv id=\"monster-adventure\" aria-label=\"ตัวอย่างเกมผจญภัยฝึกคิด\">\n\u003cstyle>\n#monster-adventure{font-family:system-ui,sans-serif;max-width:540px;margin:auto;--paper:light-dark(#fffdf7,#19332d);--ink:light-dark(#234339,#e7f3e8);--line:light-dark(#d9e4d8,#456457);--soft:light-dark(#edf3e7,#294a3e);--green:light-dark(#32694d,#b7d8a7);--on:light-dark(#fffdf4,#19352b);--tile:light-dark(#f3ead6,#4c4d39);--stone:light-dark(#68796c,#9ab2a4);color:var(--ink)}#monster-adventure *{box-sizing:border-box}#monster-adventure button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}#monster-adventure button:disabled{cursor:default;opacity:.5}#monster-adventure .app{background:var(--paper);border:1px solid var(--line);border-radius:25px;overflow:hidden}#monster-adventure .bar{padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}#monster-adventure .brand{font-weight:600;letter-spacing:.06em}#monster-adventure .tiny{opacity:.75}#monster-adventure .icon{min-width:44px;min-height:44px;background:var(--soft);border:1px solid var(--line);border-radius:12px;display:inline-flex;align-items:center;justify-content:center}#monster-adventure .levels{display:flex;padding:0 16px 12px;gap:8px}#monster-adventure .levels button{flex:1;min-height:44px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px}#monster-adventure .levels button[aria-pressed=true]{background:var(--green);color:var(--on);border-color:var(--green)}#monster-adventure .earned{padding:10px 14px;margin:0 16px 12px;background:var(--soft);border-radius:12px;display:flex;gap:10px;align-items:center}#monster-adventure .hero{height:117px;position:relative;background:linear-gradient(120deg,light-dark(#dcebd4,#314f3d),light-dark(#f4ebd0,#494936));overflow:hidden;display:flex;align-items:center;padding-left:130px;padding-right:14px}#monster-adventure .pet{position:absolute;left:4px;bottom:-4px;width:121px;height:119px;overflow:hidden;mix-blend-mode:multiply;animation:ma-breathe 3s ease-in-out infinite}#monster-adventure .pet img{position:absolute;width:416px;max-width:none;left:-25px;top:-38px}#monster-adventure .pet.celebrate{animation:ma-hop .45s 3}#monster-adventure .bubble{background:var(--paper);padding:10px 14px;border-radius:16px;border:1px solid var(--line);display:flex;gap:8px;align-items:center}#monster-adventure .stages{display:flex;gap:6px;padding:13px 16px;border-bottom:1px solid var(--line)}#monster-adventure .stages button{flex:1;min-height:48px;border:0;border-radius:12px;background:var(--soft);padding:7px 4px}#monster-adventure .stages button[aria-pressed=true]{background:var(--green);color:var(--on)}#monster-adventure .content{padding:16px}#monster-adventure .heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}#monster-adventure .heading strong{font-weight:600}#monster-adventure .actions{display:flex;gap:6px}#monster-adventure .board-wrap{position:relative;max-width:390px;margin:auto}#monster-adventure .board{display:grid;gap:5px;background:var(--soft);padding:8px;border-radius:16px;position:relative}#monster-adventure .cell{border:1px solid var(--line);border-radius:9px;background:var(--paper);min-width:0;min-height:44px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;padding:0;position:relative;overflow:hidden}#monster-adventure .cell.river{background:light-dark(#d3eceb,#264d50);border:1px dashed light-dark(#83b1ad,#85b4ac)}#monster-adventure .cell.occupied{border:2px solid light-dark(#9b7847,#f0cc92);background:light-dark(#e8c992,#766443)}#monster-adventure .cell.wall{background:var(--stone);border-color:var(--stone)}#monster-adventure .cell.target{background:light-dark(#f9e8b9,#5e522e)}#monster-adventure .cell.visited{box-shadow:inset 0 0 0 3px light-dark(#69a282,#9ac69e)}#monster-adventure .cell.hinted{animation:ma-pulse .8s 3}#monster-adventure .mirror{width:60%;height:5px;border-radius:8px;background:light-dark(#566e80,#b2d1ea);transform:rotate(-45deg);box-shadow:0 0 0 3px light-dark(#e1eaf0,#354c5c)}#monster-adventure .mirror.back{transform:rotate(45deg)}#monster-adventure .empty-mark{opacity:.3}#monster-adventure .tray{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin:14px 0 8px}#monster-adventure .piece{min-width:59px;min-height:58px;display:flex;align-items:center;justify-content:center;border:2px solid var(--line);background:var(--paper);border-radius:12px;padding:8px}#monster-adventure .piece[aria-pressed=true]{border-color:var(--green);background:var(--soft);transform:translateY(-3px)}#monster-adventure .mini-shape{display:grid;gap:2px}#monster-adventure .mini-unit{width:12px;height:12px;background:light-dark(#c79552,#e4c17d);border-radius:2px}#monster-adventure .under{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}#monster-adventure .primary{background:var(--green);color:var(--on);border:0;border-radius:12px;min-height:46px;padding:10px 20px}#monster-adventure .program{display:flex;align-items:center;gap:4px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:9px;min-height:48px;margin-top:12px}#monster-adventure .cmd{width:29px;height:30px;border:0;background:var(--paper);border-radius:7px;display:flex;align-items:center;justify-content:center}#monster-adventure .cmd.active{background:var(--green);color:var(--on)}#monster-adventure .arrows{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}#monster-adventure .feedback{text-align:center;min-height:28px;padding-top:6px}#monster-adventure .reward{background:var(--soft);padding:14px;border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap}#monster-adventure .summary{padding:0 16px 16px;text-align:center;opacity:.75}#monster-adventure .beam{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}#monster-adventure .beam polyline{fill:none;stroke:light-dark(#ce770d,#ffdd6d);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 2px light-dark(#f9cc76,#e3a743))}#monster-adventure .beam dot{fill:currentColor}#monster-adventure .endpoints{display:flex;justify-content:space-between;margin:0 3px 8px;gap:8px}#monster-adventure .shake{animation:ma-shake .4s}#monster-adventure .no-motion *{animation:none!important;transition:none!important}@keyframes ma-breathe{50%{transform:translateY(-3px) rotate(-1deg)}}@keyframes ma-hop{50%{transform:translateY(-9px)}}@keyframes ma-pulse{50%{box-shadow:inset 0 0 0 4px #d9a249}}@keyframes ma-shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}@media(prefers-reduced-motion:reduce){#monster-adventure *{animation:none!important;transition:none!important}}\n\n#monster-adventure .bar{padding:10px 16px}#monster-adventure .settings{position:relative}#monster-adventure summary{cursor:pointer;min-height:44px;display:flex;align-items:center;padding:8px;list-style:none}#monster-adventure .settings-panel{position:absolute;right:0;top:46px;z-index:10;width:245px;background:var(--paper);border:1px solid var(--line);border-radius:15px;padding:12px;box-shadow:0 6px 24px #0002}#monster-adventure .settings-panel .levels{padding:0 0 8px}#monster-adventure .hero{height:76px;padding-left:93px}#monster-adventure .pet{transform-origin:left bottom;width:90px;height:78px}#monster-adventure .pet img{width:294px;left:-17px;top:-29px}#monster-adventure .bubble{border:0;background:transparent;padding:5px}#monster-adventure .stages{padding:10px 14px}#monster-adventure .stages button{min-height:44px}#monster-adventure .content{padding:12px 16px}#monster-adventure .heading{margin-bottom:8px}#monster-adventure .heading strong{font-weight:500}#monster-adventure .endpoints{display:none}#monster-adventure .board-wrap{max-width:360px}#monster-adventure .piece{position:relative}#monster-adventure .piece .number{position:absolute;left:5px;top:2px;font-size:11px;opacity:.65}#monster-adventure .cell.keyboard-cursor{outline:3px solid var(--green);outline-offset:-3px}#monster-adventure .cell.preview{background:light-dark(#c4deb8,#42644b);box-shadow:inset 0 0 0 2px var(--green)}#monster-adventure .cell.preview-bad{background:light-dark(#edd2ae,#765b40)}#monster-adventure .feedback{min-height:20px;padding:0}#monster-adventure .keyboard-help{margin:0 16px 8px;border-top:1px solid var(--line)}#monster-adventure .key-guide{padding:0 8px 12px;display:grid;gap:5px}#monster-adventure kbd{font:inherit;background:var(--soft);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}#monster-adventure .summary{padding-bottom:12px}#monster-adventure .program .cmd{width:36px;height:44px}#monster-adventure .reset{display:none}#monster-adventure .under{margin-bottom:0}#monster-adventure .primary{min-width:110px}#monster-adventure .cell:focus-visible{outline:3px solid var(--green);outline-offset:-3px}\n\n#monster-adventure .pet{mix-blend-mode:normal;bottom:0;left:10px;width:78px;height:76px}#monster-adventure .pet svg{width:100%;height:100%}#monster-adventure .settings-panel{width:85px}#monster-adventure .hero{padding-left:100px}\n\u003c/style>\n\u003cdiv class=\"app\">\n\u003cdiv class=\"bar\">\u003cspan class=\"brand\">🐾 ผจญภัย\u003c/span>\u003cdetails class=\"settings\">\u003csummary aria-label=\"ตั้งค่า\">⚙️\u003c/summary>\u003cdiv class=\"settings-panel\">\u003cbutton class=\"icon motion\" type=\"button\" aria-label=\"หยุดแอนิเมชัน\" aria-pressed=\"false\">⏸\u003c/button>\u003c/div>\u003c/details>\u003c/div>\n\u003cdiv class=\"hero\">\u003cdiv class=\"pet\">__ADVENTURE_PET__\u003c/div>\u003cdiv class=\"bubble\" aria-live=\"polite\">\u003cspan class=\"pet-message\">🧩 → 🗝️ → 💎\u003c/span>\u003c/div>\u003c/div>\n\u003cdiv class=\"stages\">\u003cspan class=\"journey-progress\">🧩 → 🗝️ → 💎\u003c/span>\u003c/div>\n\u003cdiv class=\"content\">\u003c/div>\u003cdetails class=\"keyboard-help\">\u003csummary>⌨️ วิธีใช้คีย์บอร์ด\u003c/summary>\u003cdiv class=\"key-guide\">\u003c/div>\u003c/details>\u003cdiv class=\"summary\">ปลดล็อกจากหน้าที่จริง ✅ · ตอบผิดไม่เสียแต้ม\u003c/div>\n\u003c/div>\n\u003cscript>\n(()=>{\nconst setup=__ADVENTURE_SETUP__;\n\nconst root=document.getElementById('monster-adventure'),q=s=>root.querySelector(s),all=s=>[...root.querySelectorAll(s)];\nconst state={level:setup.level,game:setup.stage,movement:true,done:[0,1,2].map(i=>i\u003csetup.stage)};let board=[],pieces=[],selected=0,rotated=false,program=[],pos=0,hasKey=false,mirrors=[],busy=false,epoch=0,cursor=0,mirrorCursor=0,keyboardMode=false,history=[];\nconst routeMaps=[{n:4,start:12,key:2,goal:3,walls:[1,5,9,11]},{n:5,start:20,key:3,goal:24,walls:[1,6,8,11,13,16,18]}];\nconst mirrorMaps=[{n:4,start:2,target:[3,4],items:[[1,2],[1,0],[3,0]],answer:['/','/','\\\\']},{n:5,start:3,target:[5,4],items:[[1,3],[1,1],[3,1],[3,4],[4,0],[4,2]],answer:['/','/','\\\\','\\\\','/','\\\\']}];\nfunction buttons(){q('.journey-progress').textContent=\"ด่าน \"+(state.game+1)+\" / 3 · \"+[\"🌉\",\"🗝️\",\"💎\"][state.game];all('[data-level]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.level===state.level)));all('[data-game]').forEach(b=>{let i=+b.dataset.game;b.setAttribute('aria-pressed',String(i===state.game));b.textContent=(state.done[i]?'✓ ':['🌉 ','🗝️ ','💎 '][i])+['สะพาน','เส้นทาง','กระจก'][i];});}\nfunction say(text){const f=q('.feedback');if(f)f.textContent=text;}\nfunction pulse(el){if(!el)return;el.classList.remove('hinted');void el.offsetWidth;el.classList.add('hinted');}\nfunction sendCompletion(){parent.postMessage({type:'adventure:complete',sessionId:setup.sessionId,stage:state.game},'*');}\nfunction win(){\n busy=true;let r=q('.reward');if(!r){r=document.createElement('div');r.className='reward';q('.content').append(r);}\n r.textContent='กำลังบันทึก…';sendCompletion();\n}\nwindow.addEventListener('message',event=>{\n const m=event.data;if(event.source!==parent||!m||m.sessionId!==setup.sessionId||m.stage!==state.game)return;\n const r=q('.reward');if(!r)return;\n if(m.type==='adventure:save-error'){\n   r.innerHTML='\u003cspan>ยังบันทึกไม่ได้ เชื่อมต่อแล้วลองใหม่\u003c/span>\u003cbutton type=\"button\" class=\"primary retry-send\">บันทึกอีกครั้ง\u003c/button>';\n   q('.retry-send').onclick=()=>{r.textContent='กำลังบันทึก…';sendCompletion();};return;\n }\n if(m.type!=='adventure:saved')return;\n busy=false;state.done[state.game]=true;buttons();say('✓ บันทึกแล้ว');q('.pet-message').textContent='✨ 🙌 ✨';q('.pet').classList.add('celebrate');\n r.innerHTML=state.game===2?'\u003cspan class=\"prize-name\">\u003c/span>\u003cbutton type=\"button\" class=\"primary replay\">กลับบ้าน ✓\u003c/button>':'\u003cspan>✓ ผ่านแล้ว!\u003c/span>\u003cbutton type=\"button\" class=\"primary next\">ไปต่อ →\u003c/button>';\n if(state.game===2){q('.prize-name').textContent=m.prize||'🎁 ของสะสม';q('.replay').onclick=()=>parent.postMessage({type:'adventure:close',sessionId:setup.sessionId},'*');}\n else q('.next').onclick=()=>{state.game++;init();};\n});\nfunction shell(title){q('.content').innerHTML='\u003cdiv class=\"heading\">\u003cstrong>'+title+'\u003c/strong>\u003cdiv class=\"actions\">\u003cbutton type=\"button\" class=\"icon hint\" aria-label=\"คำใบ้ทีละขั้น\">💡\u003c/button>\u003cbutton type=\"button\" class=\"icon reset\" aria-label=\"เริ่มด่านนี้ใหม่\">↻\u003c/button>\u003c/div>\u003c/div>\u003cdiv class=\"play\">\u003c/div>\u003cdiv class=\"feedback\" aria-live=\"polite\">\u003c/div>';q('.reset').onclick=init;}\nfunction init(){epoch++;busy=false;cursor=0;mirrorCursor=0;keyboardMode=false;history=[];buttons();q('.pet-message').textContent=['👆 🧩 → ▦','↑ → ↓ ←  ▶','👆 🪞 ↻  ☀️'][state.game];if(state.game===0)bridgeInit();else if(state.game===1)routeInit();else mirrorInit();updateGuide();}\nfunction pieceDimensions(p){return rotated&&selected===p.id?[p.h,p.w]:[p.w,p.h];}\nfunction bridgeInit(){shell('เติมสะพานให้เต็ม');const cols=state.level?5:4;board=Array(cols*3).fill(-1);pieces=(state.level?[[3,1],[3,1],[2,2],[1,2],[1,2],[1,1]]:[[2,2],[1,2],[2,2],[1,2]]).map(([w,h],id)=>({id,w,h,used:false}));selected=0;rotated=false;q('.play').innerHTML='\u003cdiv class=\"endpoints\">\u003cspan>🐉\u003c/span>\u003cspan>🌳 🎁\u003c/span>\u003c/div>\u003cdiv class=\"board-wrap\">\u003cdiv class=\"board\">\u003c/div>\u003c/div>\u003cdiv class=\"tray\">\u003c/div>\u003cdiv class=\"under\">\u003cbutton type=\"button\" class=\"icon rotate\" aria-label=\"หมุนชิ้นส่วน\">↻ หมุน\u003c/button>\u003cbutton type=\"button\" class=\"icon bridge-undo\" aria-label=\"ย้อนการวางล่าสุด\">↶\u003c/button>\u003c/div>';q('.hint').onclick=()=>{const unused=pieces.find(p=>!p.used);if(!unused)return;selected=unused.id;rotated=false;drawBridge();pulse(q('[data-piece=\"'+selected+'\"]'));say('🧩 ↻ → ▦');};q('.rotate').onclick=()=>{rotated=!rotated;drawBridge();paintCursor();};q('.bridge-undo').onclick=undoBridge;drawBridge();}\nfunction drawBridge(){const cols=state.level?5:4;const g=q('.board');g.style.gridTemplateColumns='repeat('+cols+',1fr)';g.innerHTML=board.map((id,i)=>'\u003cbutton type=\"button\" class=\"cell '+(id\u003c0?'river':'occupied')+'\" data-cell=\"'+i+'\" aria-label=\"ช่อง '+(i+1)+(id>=0?' ชิ้น '+(id+1)+' แตะเพื่อนำออก':' ว่าง')+'\">'+(id>=0?['●','◆','▲','✦','■','○'][id]:'')+'\u003c/button>').join('');q('.tray').innerHTML=pieces.map(p=>{let [w,h]=pieceDimensions(p);return '\u003cbutton type=\"button\" class=\"piece\" data-piece=\"'+p.id+'\" aria-label=\"ชิ้น '+(p.id+1)+' ขนาด '+w+' คูณ '+h+'\" aria-pressed=\"'+(selected===p.id)+'\" '+(p.used?'disabled':'')+'>\u003cspan class=\"number\">'+(p.id+1)+'\u003c/span>\u003cspan class=\"mini-shape\" style=\"grid-template-columns:repeat('+w+',12px)\">'+Array(w*h).fill('\u003cspan class=\"mini-unit\">\u003c/span>').join('')+'\u003c/span>\u003c/button>';}).join('');all('[data-piece]').forEach(b=>b.onclick=()=>{selected=+b.dataset.piece;rotated=false;drawBridge();paintCursor();});all('[data-cell]').forEach(b=>b.onclick=()=>{if(q('.reward'))return;const i=+b.dataset.cell;cursor=i;if(board[i]>=0){rememberBridge();let id=board[i];board=board.map(v=>v===id?-1:v);pieces[id].used=false;selected=id;rotated=false;drawBridge();return;}let p=pieces[selected];if(!p||p.used)return;let [w,h]=pieceDimensions(p),x=i%cols,y=Math.floor(i/cols),cells=[];for(let yy=0;yy\u003ch;yy++)for(let xx=0;xx\u003cw;xx++)cells.push((y+yy)*cols+x+xx);if(x+w>cols||y+h>3||cells.some(c=>board[c]>=0)){pulse(b);say('↻ 🧩');return;}rememberBridge();cells.forEach(c=>board[c]=p.id);p.used=true;selected=pieces.find(p=>!p.used)?.id??-1;rotated=false;drawBridge();say('');if(board.every(v=>v>=0))win();});all('[data-cell]').forEach(b=>b.onpointerenter=()=>{if(!keyboardMode){cursor=+b.dataset.cell;previewBridge();}});g.onpointerleave=()=>{if(!keyboardMode)clearPreview();};paintCursor();}\nfunction routeInit(){shell('เก็บกุญแจ → ไปประตู');const m=routeMaps[state.level];program=[];pos=m.start;hasKey=false;q('.play').innerHTML='\u003cdiv class=\"board-wrap\">\u003cdiv class=\"board\">\u003c/div>\u003c/div>\u003cdiv class=\"program\" aria-label=\"ลำดับการเดิน\">\u003c/div>\u003cdiv class=\"arrows\">\u003cbutton type=\"button\" class=\"icon\" data-dir=\"U\" aria-label=\"ขึ้น\">↑\u003c/button>\u003cbutton type=\"button\" class=\"icon\" data-dir=\"R\" aria-label=\"ขวา\">→\u003c/button>\u003cbutton type=\"button\" class=\"icon\" data-dir=\"D\" aria-label=\"ลง\">↓\u003c/button>\u003cbutton type=\"button\" class=\"icon\" data-dir=\"L\" aria-label=\"ซ้าย\">←\u003c/button>\u003cbutton type=\"button\" class=\"icon undo\" aria-label=\"ลบก้าวสุดท้าย\">⌫\u003c/button>\u003c/div>\u003cdiv class=\"under\">\u003cbutton type=\"button\" class=\"primary run\">▶ เดิน\u003c/button>\u003c/div>';q('.hint').onclick=()=>{pulse(q('[data-r=\"'+m.key+'\"]'));q('.pet-message').textContent='🐾 → 🗝️ → 🚪';};all('[data-dir]').forEach(b=>b.onclick=()=>{if(busy)return;if(program.length\u003c24){program.push(b.dataset.dir);drawProgram();}});q('.undo').onclick=()=>{if(!busy){program.pop();drawProgram();}};q('.run').onclick=runRoute;drawRoute();drawProgram();}\nfunction drawProgram(active=-1){q('.program').innerHTML=program.length?program.map((d,i)=>'\u003cbutton type=\"button\" class=\"cmd '+(i===active?'active':'')+'\" data-cmd=\"'+i+'\" aria-label=\"ลบก้าว '+(i+1)+'\">'+{U:'↑',R:'→',D:'↓',L:'←'}[d]+'\u003c/button>').join(''):'\u003cspan aria-hidden=\"true\">🐾 · · ·\u003c/span>';all('[data-cmd]').forEach(b=>b.onclick=()=>{if(!busy){program.splice(+b.dataset.cmd,1);drawProgram();}});}\nfunction drawRoute(){const m=routeMaps[state.level];q('.board').style.gridTemplateColumns='repeat('+m.n+',1fr)';q('.board').innerHTML=Array.from({length:m.n*m.n},(_,i)=>'\u003cdiv class=\"cell '+(m.walls.includes(i)?'wall':i===m.goal?'target':'')+'\" data-r=\"'+i+'\" aria-label=\"'+(i===pos?'มอนสเตอร์':i===m.key&&!hasKey?'กุญแจ':i===m.goal?'ประตู':m.walls.includes(i)?'หิน':'ทางเดิน')+'\">'+(i===pos?'🐾':m.walls.includes(i)?'🪨':i===m.key&&!hasKey?'🗝️':i===m.goal?(hasKey?'🚪':'🔒'):'')+'\u003c/div>').join('');}\nasync function runRoute(){if(busy||!program.length||q('.reward'))return;busy=true;pos=routeMaps[state.level].start;hasKey=false;drawRoute();const token=epoch,m=routeMaps[state.level];for(let i=0;i\u003cprogram.length;i++){drawProgram(i);await new Promise(r=>setTimeout(r,state.movement?320:30));if(token!==epoch)return;const [dx,dy]={U:[0,-1],R:[1,0],D:[0,1],L:[-1,0]}[program[i]],x=pos%m.n+dx,y=Math.floor(pos/m.n)+dy,next=y*m.n+x;if(x\u003c0||x>=m.n||y\u003c0||y>=m.n||m.walls.includes(next)){say('🪨 ↩️');busy=false;return;}pos=next;if(pos===m.key)hasKey=true;drawRoute();if(pos===m.goal){if(hasKey){win();return;}say('🔒 ← 🗝️');busy=false;return;}}busy=false;drawProgram();say(hasKey?'🗝️ → 🚪':'🐾 → 🗝️');}\nfunction mirrorInit(){shell('ส่งแสงไปหาคริสตัล');const m=mirrorMaps[state.level];mirrors=m.items.map(([x,y],i)=>({x,y,type:m.answer[i]==='/'?'\\\\':'/'}));q('.play').innerHTML='\u003cdiv class=\"endpoints\">\u003cspan>☀️ →\u003c/span>\u003cspan>→ 💎\u003c/span>\u003c/div>\u003cdiv class=\"board-wrap\">\u003cdiv class=\"board\">\u003c/div>\u003csvg class=\"beam\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\" aria-hidden=\"true\">\u003c/svg>\u003c/div>\u003cdiv class=\"under\">\u003cbutton type=\"button\" class=\"primary shine\">☀️ ยิงแสง\u003c/button>\u003c/div>';q('.hint').onclick=()=>{const i=mirrors.findIndex((v,i)=>v.type!==m.answer[i]);if(i>=0)pulse(q('[data-m=\"'+i+'\"]'));say('☀️ ↗ 🪞');};q('.shine').onclick=shine;drawMirrors();}\nfunction drawMirrors(){const m=mirrorMaps[state.level];q('.board').style.gridTemplateColumns='repeat('+m.n+',1fr)';q('.board').innerHTML=Array.from({length:m.n*m.n},(_,c)=>{let x=c%m.n,y=Math.floor(c/m.n),i=mirrors.findIndex(v=>v.x===x&&v.y===y);return '\u003cbutton type=\"button\" class=\"cell\" '+(i>=0?'data-m=\"'+i+'\"':'disabled')+' aria-label=\"'+(i>=0?'หมุนกระจก '+(i+1):x===0&&y===m.start?'จุดเริ่มแสง':'ช่องว่าง')+'\">'+(i>=0?'\u003cspan class=\"mirror '+(mirrors[i].type==='\\\\'?'back':'')+'\">\u003c/span>':x===0&&y===m.start?'☀️':((m.target[0]===m.n&&x===m.n-1&&y===m.target[1])||(m.target[1]===m.n&&y===m.n-1&&x===m.target[0]))?'💎':'\u003cspan class=\"empty-mark\">·\u003c/span>')+'\u003c/button>';}).join('');all('[data-m]').forEach(b=>b.onclick=()=>{if(q('.reward'))return;mirrorCursor=+b.dataset.m;const p=mirrors[mirrorCursor];p.type=p.type==='/'?'\\\\':'/';q('.beam').innerHTML='';drawMirrors();paintCursor();say('');});paintCursor();}\nfunction trace(){const m=mirrorMaps[state.level];let x=-1,y=m.start,dx=1,dy=0,points=[[x,y]],seen=new Set();for(let k=0;k\u003c100;k++){x+=dx;y+=dy;points.push([x,y]);if(x\u003c0||y\u003c0||x>=m.n||y>=m.n)return {points,won:x===m.target[0]&&y===m.target[1]};let key=[x,y,dx,dy].join(',');if(seen.has(key))return{points,won:false};seen.add(key);const mirror=mirrors.find(v=>v.x===x&&v.y===y);if(mirror){if(mirror.type==='/')[dx,dy]=[-dy,-dx];else [dx,dy]=[dy,dx];}}return{points,won:false};}\nfunction shine(){const m=mirrorMaps[state.level],res=trace(),wrap=q('.board-wrap').getBoundingClientRect(),cells=all('.board .cell');const points=res.points.map(([x,y])=>{const cell=cells[Math.max(0,Math.min(m.n-1,y))*m.n+Math.max(0,Math.min(m.n-1,x))].getBoundingClientRect();return [(x\u003c0?0:x>=m.n?100:(cell.left-wrap.left+cell.width/2)/wrap.width*100),(y\u003c0?0:y>=m.n?100:(cell.top-wrap.top+cell.height/2)/wrap.height*100)].join(',');}).join(' ');q('.beam').innerHTML='\u003cpolyline points=\"'+points+'\">\u003c/polyline>';if(res.won)win();else say('👀 ☀️ → 🪞');}\n\nfunction updateGuide(){q('.key-guide').innerHTML=[\n '\u003cspan>\u003ckbd>1–6\u003c/kbd> เลือกชิ้น · \u003ckbd>R\u003c/kbd> หมุน\u003c/span>\u003cspan>\u003ckbd>↑ ↓ ← →\u003c/kbd> เลือกช่อง · \u003ckbd>Space\u003c/kbd> วาง / นำออก\u003c/span>\u003cspan>\u003ckbd>Backspace\u003c/kbd> ย้อนกลับ · \u003ckbd>H\u003c/kbd> คำใบ้\u003c/span>',\n '\u003cspan>\u003ckbd>↑ ↓ ← →\u003c/kbd> เพิ่มก้าวเดิน\u003c/span>\u003cspan>\u003ckbd>Enter\u003c/kbd> เริ่มเดิน · \u003ckbd>Backspace\u003c/kbd> ลบก้าว\u003c/span>\u003cspan>\u003ckbd>H\u003c/kbd> คำใบ้\u003c/span>',\n '\u003cspan>\u003ckbd>↑ ↓ ← →\u003c/kbd> เลือกกระจก\u003c/span>\u003cspan>\u003ckbd>R\u003c/kbd> / \u003ckbd>Space\u003c/kbd> หมุน · \u003ckbd>Enter\u003c/kbd> ยิงแสง\u003c/span>\u003cspan>\u003ckbd>H\u003c/kbd> คำใบ้\u003c/span>'\n][state.game];}\nfunction rememberBridge(){history.push({board:[...board],used:pieces.map(p=>p.used),selected,rotated});}\nfunction undoBridge(){if(!history.length||q('.reward'))return;const prev=history.pop();board=prev.board;pieces.forEach((p,i)=>p.used=prev.used[i]);selected=prev.selected;rotated=prev.rotated;drawBridge();paintCursor();say('');}\nfunction clearPreview(){all('.cell').forEach(c=>c.classList.remove('preview','preview-bad'));}\nfunction previewBridge(){clearPreview();if(state.game!==0||q('.reward'))return;const p=pieces[selected];if(!p||p.used||board[cursor]>=0)return;const cols=state.level?5:4,[w,h]=pieceDimensions(p),x=cursor%cols,y=Math.floor(cursor/cols),targets=[];let valid=x+w\u003c=cols&&y+h\u003c=3;for(let yy=0;yy\u003ch;yy++)for(let xx=0;xx\u003cw;xx++){let c=(y+yy)*cols+x+xx;if(x+xx\u003ccols&&y+yy\u003c3){targets.push(c);if(board[c]>=0)valid=false;}}targets.forEach(c=>q('[data-cell=\"'+c+'\"]').classList.add(valid?'preview':'preview-bad'));}\nfunction paintCursor(){all('.keyboard-cursor').forEach(c=>c.classList.remove('keyboard-cursor'));if(!keyboardMode)return;const b=state.game===0?q('[data-cell=\"'+cursor+'\"]'):state.game===2?q('[data-m=\"'+mirrorCursor+'\"]'):null;if(b){b.classList.add('keyboard-cursor');b.focus({preventScroll:true});}if(state.game===0)previewBridge();}\nfunction handleKeyboard(e){if(e.altKey||e.ctrlKey||e.metaKey||e.target.closest('input,select,textarea,[contenteditable],.settings,.keyboard-help'))return;const k=e.key.toLowerCase(),arrow={arrowup:'U',arrowright:'R',arrowdown:'D',arrowleft:'L'}[k];const supported=!!arrow||['r','h','enter',' ','backspace'].includes(k)||(state.game===0&&/^[1-6]$/.test(k));if(!supported)return;if(k===' '&&e.target.closest('button')&&!e.target.closest('[data-cell],[data-m]'))return;if(k==='enter'&&e.target.closest('.stages,.levels,.motion,.hint,.rotate,.bridge-undo,.undo,.next,.replay,.retry-send'))return;e.preventDefault();if(busy)return;if(q('.reward')){if(k==='enter')(q('.next')||q('.replay'))?.click();return;}keyboardMode=true;\n if(k==='h'){q('.hint').click();return;}\n if(state.game===0){if(/^[1-6]$/.test(k)){const p=pieces[+k-1];if(p&&!p.used){selected=p.id;rotated=false;drawBridge();}}else if(k==='r')q('.rotate').click();else if(k==='backspace')undoBridge();else if(arrow){const cols=state.level?5:4,x=cursor%cols,y=Math.floor(cursor/cols),[dx,dy]={U:[0,-1],R:[1,0],D:[0,1],L:[-1,0]}[arrow];cursor=Math.max(0,Math.min(2,y+dy))*cols+Math.max(0,Math.min(cols-1,x+dx));}else if(k===' '||k==='enter')q('[data-cell=\"'+cursor+'\"]').click();paintCursor();}\n else if(state.game===1){if(arrow)q('[data-dir=\"'+arrow+'\"]').click();else if(k==='backspace')q('.undo').click();else if(k==='enter')q('.run').click();}\n else {if(arrow){mirrorCursor=(mirrorCursor+(['R','D'].includes(arrow)?1:mirrors.length-1))%mirrors.length;paintCursor();}else if(k==='r'||k===' '){q('[data-m=\"'+mirrorCursor+'\"]').click();paintCursor();}else if(k==='enter')q('.shine').click();}\n}\nroot.addEventListener('keydown',handleKeyboard);\nlet activityAt=0;['pointerdown','keydown'].forEach(type=>root.addEventListener(type,()=>{if(Date.now()-activityAt>1000){activityAt=Date.now();parent.postMessage({type:'adventure:activity',sessionId:setup.sessionId},'*');}}));\nconst resize=()=>parent.postMessage({type:'adventure:resize',sessionId:setup.sessionId,height:Math.ceil(root.getBoundingClientRect().height)+16},'*');\nnew ResizeObserver(resize).observe(root);window.addEventListener('load',resize);\n\nroot.addEventListener('pointerdown',()=>{keyboardMode=false;all('.keyboard-cursor').forEach(c=>c.classList.remove('keyboard-cursor'));});\n\nall('[data-level]').forEach(b=>b.onclick=()=>{state.level=+b.dataset.level;state.done=[false,false,false];init();});all('[data-game]').forEach(b=>b.onclick=()=>{state.game=+b.dataset.game;init();});function movement(){q('.app').classList.toggle('no-motion',!state.movement);q('.motion').textContent=state.movement?'⏸':'▶';q('.motion').setAttribute('aria-pressed',String(!state.movement));q('.motion').setAttribute('aria-label',state.movement?'หยุดแอนิเมชัน':'เปิดแอนิเมชัน');}q('.motion').onclick=()=>{state.movement=!state.movement;movement();};init();movement();if(globalThis.Tweak){const t=new Tweak({container:root,onChange:movement});t.addToggle(state,'movement',{label:'Small movement'});}\n})();\n\u003c/script>\n\u003c/div>\n\u003c/body>\u003c/html>";
+
+/* Discipline adventures v1 — only accepted chores unlock a journey. */
+const ADV_PRIZES = [{id:'sprout',emo:'🌱',name:'ต้นไม้จิ๋ว'}, {id:'crystal',emo:'💎',name:'คริสตัล'}, {id:'tent',emo:'⛺',name:'เต็นท์สำรวจ'}];
+let adventureOverlay = null, adventureOpening = false, adventureContext = null;
+const advState = k => Object.assign({level:0,completed:0,collection:{},session:null}, k.adventure || {});
+const advActive = a => !!(a.session && Number.isInteger(a.session.stage) && a.session.stage >= 0 && a.session.stage < 3);
+// Pure state transitions are shared by the transaction handlers and tests.
+function advNewJourney(k, id, ts){
+  const a = advState(k);
+  if(advActive(a)) return a;
+  const pet = activePet(k);
+  if(!pet) throw new Error('ทำงานเพื่อฟักเพื่อนตัวแรกก่อนนะ เสบียงที่ได้จะเก็บรอไว้');
+  return {...a, session:{id,stage:0,level:a.level===1?1:0,pet,startedAt:ts}};
+}
+function advCompleteStage(k, sessionId, stage){
+  const a = advState(k), s = a.session;
+  if(!s || s.id !== sessionId) throw new Error('รอบสำรวจเปลี่ยนแล้ว กรุณาเปิดใหม่');
+  if(!Number.isInteger(stage) || stage < 0 || stage > 2 || stage > s.stage)
+    throw new Error('ยังไม่ถึงด่านนี้');
+  if(stage < s.stage) return a; // retry / another device: never issue the prize twice
+  const next = {...a,session:{...s,stage:stage+1}};
+  if(stage===2){
+    const prize = ADV_PRIZES[Number(a.completed||0)%ADV_PRIZES.length];
+    next.completed = Number(a.completed||0)+1;
+    next.collection = {...a.collection,[prize.id]:Number(a.collection[prize.id]||0)+1};
+    next.session.prize = prize.id;
+  }
+  return next;
+}
+function adventureCard(k){
+  const a=advState(k), active=advActive(a), pet=activePet(k);
+  const tickets=(S.adventureTickets||[]).filter(t=>t.kidId===k.id).length;
+  const can=active || (tickets>0 && !!pet);
+  return `<div class="card">
+    <div class="row-between"><b>🧭 ผจญภัยฝึกคิด</b><span class="tag">🎒 ${tickets}</span></div>
+    <div class="muted" style="margin:8px 0">งานที่ผ่านและได้แต้ม 1 งาน → สำรวจ 1 รอบ · 3 ด่าน</div>
+    <button class="btn-primary btn-full" ${can?'':'disabled'} onclick="startAdventure()">${active?`▶ เล่นต่อ · ด่าน ${a.session.stage+1}/3`:!pet?'🥚 รอเพื่อนฟักก่อน':tickets?'🧭 ออกสำรวจ':'🔒 ทำหน้าที่เพื่อรับเสบียง'}</button>
+    ${active?'<div class="muted" style="margin-top:7px">กลับมาต่อได้ ไม่ใช้เสบียงเพิ่ม</div>':''}
+    <details style="margin-top:10px"><summary>⚙️ ความยากของ ${esc(k.name)}</summary>
+      <div class="row" style="margin-top:8px">
+      ${[0,1].map(n=>`<button class="btn-sm ${a.level===n?'btn-primary':''}" ${active?'disabled':''} aria-pressed="${a.level===n}" onclick="setAdventureLevel(${n})">${n?'คิดหลายขั้น':'เริ่มท้าทาย'}</button>`).join('')}</div>
+      ${active?'<div class="muted">เปลี่ยนได้เมื่อจบรอบนี้</div>':''}</details>
+    <div class="muted" style="margin-top:10px">จบแล้ว ${Number(a.completed||0)} รอบ · ของสะสม ${ADV_PRIZES.map(p=>`${p.emo} ${Number(a.collection[p.id]||0)}`).join(' · ')}</div>
+    <div class="muted" style="margin-top:6px">ตอบผิดไม่เสียแต้ม · บันทึกเมื่อผ่านแต่ละด่าน · ใช้อินเทอร์เน็ตตอนเริ่มและบันทึก</div>
+  </div>`;
+}
+async function setAdventureLevel(level){
+  if(view.screen!=='kid' || ![0,1].includes(level)) return;
+  const ref=dref('kids',view.kidId);
+  try{await runTransaction(db,async tx=>{
+    const snap=await tx.get(ref);if(!snap.exists())throw new Error('ไม่พบข้อมูลเด็ก');
+    const a=advState(snap.data());if(advActive(a))throw new Error('จบรอบนี้ก่อนเปลี่ยนความยากนะ');
+    tx.update(ref,{'adventure.level':level});
+  });}catch(e){toast(e.message||'บันทึกไม่ได้ ลองใหม่เมื่อเชื่อมต่ออินเทอร์เน็ต');}
+}
+async function startAdventure(){
+  if(adventureOpening || adventureOverlay || view.screen!=='kid' || !base)return;
+  if(!navigator.onLine){toast('เชื่อมต่ออินเทอร์เน็ตก่อนเริ่มสำรวจนะ');return;}
+  adventureOpening=true;
+  const kidId=view.kidId,family=base,ref=dref('kids',kidId),id=uid(),ts=now();
+  const ticket=(S.adventureTickets||[]).find(t=>t.kidId===kidId);
+  const ticketRef=ticket?dref('adventureTickets',ticket.id):null;
+  try{
+    const result=await runTransaction(db,async tx=>{
+      const snap=await tx.get(ref);if(!snap.exists())throw new Error('ไม่พบข้อมูลเด็ก');
+      const k=snap.data(),a=advState(k);
+      if(advActive(a))return {k,a};
+      if(!ticket)throw new Error('ทำหน้าที่สำเร็จเพื่อรับเสบียงก่อนนะ');
+      const t=await tx.get(ticketRef);
+      if(!t.exists()||t.data().kidId!==kidId||t.data().state!=='ready')throw new Error('เสบียงนี้ถูกใช้แล้ว กรุณาลองใหม่');
+      const next=advNewJourney(k,id,ts);
+      tx.update(ticketRef,{state:'used',sessionId:id});
+      tx.update(ref,{adventure:next});
+      return {k,a:next};
+    });
+    if(base!==family || view.screen!=='kid' || view.kidId!==kidId)return;
+    showAdventure(result.k,result.a,family);
+  }catch(e){toast(e.message||'เปิดการสำรวจไม่ได้ กรุณาลองใหม่');}
+  finally{adventureOpening=false;}
+}
+function closeAdventure(){
+  if(adventureOverlay){adventureOverlay.remove();adventureOverlay=null;}
+  adventureContext=null;document.body.style.overflow='';lastTouch=Date.now();
+}
+function showAdventure(k,a,family){
+  closeAdventure();
+  const overlay=document.createElement('div');overlay.id='adventure-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:9000;background:var(--bg);overflow:auto;padding:12px;';
+  overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','ผจญภัยของ '+k.name);
+  overlay.innerHTML=`<div style="max-width:540px;margin:auto"><div class="row-between" style="margin-bottom:8px"><b>${esc(k.name)} · 🧭 ผจญภัย</b><button id="adventure-pause">พักก่อน ✕</button></div><div id="adventure-save-note" class="muted" style="margin-bottom:6px">บันทึกเมื่อผ่านแต่ละด่าน · พักแล้วกลับมาต่อได้</div><iframe title="เกมฝึกคิด" sandbox="allow-scripts" style="width:100%;height:840px;border:0;display:block;"></iframe></div>`;
+  document.body.append(overlay);document.body.style.overflow='hidden';adventureOverlay=overlay;
+  const frame=overlay.querySelector('iframe');
+  adventureContext={family,kidId:k.id,sessionId:a.session.id,frame};
+  overlay.querySelector('#adventure-pause').onclick=()=>{closeAdventure();render();};
+  const e=a.session.pet,stg=petStage(Number(((k.petst||{})[e]||{}).c||0)),art=petArt(e,stg);
+  const markup=art && /^(data:image\/(png|jpeg|webp|gif);base64,|https:\/\/)/i.test(art)
+    ? `<img src="${esc(art)}" alt="${esc(petBy(e).n)}" style="width:100%;height:100%;object-fit:contain;position:static">`
+    : petSVG(e,'happy',stg);
+  const setup=JSON.stringify({sessionId:a.session.id,stage:a.session.stage,level:a.session.level}).replace(/</g,'\\u003c');
+  frame.srcdoc=ADVENTURE_GAME.replace('__ADVENTURE_SETUP__',setup).replace('__ADVENTURE_PET__',markup);
+}
+window.addEventListener('message',async event=>{
+  const ctx=adventureContext,m=event.data;
+  if(!ctx||event.source!==ctx.frame.contentWindow||!m||m.sessionId!==ctx.sessionId||base!==ctx.family)return;
+  if(m.type==='adventure:activity'){lastTouch=Date.now();return;}
+  if(m.type==='adventure:resize'&&Number.isFinite(m.height)){
+    ctx.frame.style.height=Math.max(400,Math.min(1400,m.height))+'px';return;
+  }
+  if(m.type==='adventure:close'){closeAdventure();render();return;}
+  if(m.type!=='adventure:complete'||!Number.isInteger(m.stage)||m.stage<0||m.stage>2)return;
+  try{
+    const ref=dref('kids',ctx.kidId);
+    const a=await runTransaction(db,async tx=>{
+      const snap=await tx.get(ref);if(!snap.exists())throw new Error('ไม่พบข้อมูลเด็ก');
+      const next=advCompleteStage(snap.data(),ctx.sessionId,m.stage);
+      tx.update(ref,{adventure:next});return next;
+    });
+    if(adventureContext!==ctx)return;
+    const prize=ADV_PRIZES.find(p=>p.id===a.session.prize);
+    ctx.frame.contentWindow.postMessage({type:'adventure:saved',sessionId:ctx.sessionId,stage:m.stage,prize:prize?prize.emo+' '+prize.name:''},'*');
+  }catch(e){
+    if(adventureContext!==ctx)return;
+    ctx.frame.contentWindow.postMessage({type:'adventure:save-error',sessionId:ctx.sessionId,stage:m.stage},'*');
+  }
+});
+
 /* ---------- เริ่ม ---------- */
 onAuthStateChanged(auth, async user => {
   window.__booted = true;               // บอกตัวจับข้อผิดพลาดว่าเริ่มระบบสำเร็จแล้ว
   unsubs.forEach(u => { try{ u(); }catch(e){} });
+  closeAdventure();
   unsubs = []; ready = {}; S = null;
   if(!user){ viewLogin(); return; }
   base = user.uid;
@@ -4072,6 +4209,7 @@ onAuthStateChanged(auth, async user => {
 
 /* ---------- ให้ปุ่มใน HTML เรียกใช้ได้ ---------- */
 Object.assign(window, {
+  startAdventure, setAdventureLevel,
   askPin, pinTap, pinDel, go, setTab, doChore, redeem, shareWith, shareAlone, giveAll,
   approve, reject, markParent, giveChore, applyPenalty, applyPenaltyAll, openAdjust, undoLog,
   openGive, giveForm, joinShare, petAct, petChoose, openPetArt, petArtTier, pickPetArt, pickPetArt3, clearPetArt,
