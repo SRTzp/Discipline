@@ -288,7 +288,7 @@
 <script>
 /* ตัวจับข้อผิดพลาดสำหรับหน้า Firebase เดิม */
 (function(){
-  if(!new URLSearchParams(location.search).has('legacy')) return;
+  if(new URLSearchParams(location.search).has('pilot')||new URLSearchParams(location.search).has('emulator')||new URLSearchParams(location.search).has('preview')) return;
   var shown = false;
   function hint(m){
     m = String(m||'');
@@ -349,7 +349,7 @@ const firebaseConfig = {
 };
 /* ⬆⬆⬆ ถ้าจะเปลี่ยนโปรเจกต์ ให้แก้แค่ 6 บรรทัดข้างบนนี้ ห้ามเติม import หรือ initializeApp ⬆⬆⬆ */
 
-if(new URLSearchParams(location.search).has('legacy')) {
+if(!new URLSearchParams(location.search).has('pilot')&&!new URLSearchParams(location.search).has('emulator')&&!new URLSearchParams(location.search).has('preview')) {
 const {initializeApp} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
 const {getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
        setPersistence, browserLocalPersistence} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
@@ -4226,7 +4226,7 @@ Object.assign(window, {
 
 <!-- DISCIPLINE_PILOT_INLINE_START -->
 <script type="module">
-if(!new URLSearchParams(location.search).has('legacy')&&!new URLSearchParams(location.search).has('preview')) {
+if(new URLSearchParams(location.search).has('pilot')||new URLSearchParams(location.search).has('emulator')) {
   window.__booted=true;
   document.title='Discipline · รุ่นทดลองแต้มเดียว 0.1';
   let PILOT_REMOTE=null;
