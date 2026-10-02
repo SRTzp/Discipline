@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "artifact": "discipline-spark-stage-2026-10-02",
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 465685,
+      "sha256": "f66e76c56d68fb4cdd94ed2d5ed0dafdf8d2b28ec888fd91be044d72f577cae2"
+    },
+    {
+      "path": "pilot/engine.mjs",
+      "bytes": 29187,
+      "sha256": "171e3d45534de6b4e524f64135b5724b60a38cb0a7439f39978f211b3614f14d"
+    },
+    {
+      "path": "pilot/spark-intents.mjs",
+      "bytes": 5360,
+      "sha256": "6a8e49699da38871f264a9d503b9393661a01f5cf8afd0f6e75397971bdf5051"
+    },
+    {
+      "path": "pilot/spark-pets.mjs",
+      "bytes": 1009,
+      "sha256": "837e4f8172279b92f3a70b1f440f67b22d18569bdbe90fdfab2142dd1dde4071"
+    },
+    {
+      "path": "pilot/spark-store.mjs",
+      "bytes": 10940,
+      "sha256": "4619c0abc40c50e700e2a8b2f711040bb9b772851c825b641f0ed79142bd2223"
+    },
+    {
+      "path": "pilot/firebase-spark.mjs",
+      "bytes": 5582,
+      "sha256": "6a57639d203a66b0c2cf18fdb63410931b22343cfffe9a67c69491967597bdc6"
+    },
+    {
+      "path": "pilot/live-retry.mjs",
+      "bytes": 789,
+      "sha256": "7d7401ea41fd2d68924e8032c83eed6a2ac9cc15cee7330015de5a89484f6014"
+    }
+  ],
+  "defaultMode": "legacy",
+  "sparkRoute": "?spark=1",
+  "requiresSparkRules": true,
+  "requiresFrozenMigration": true,
+  "productionDataIncluded": false,
+  "billingRequired": false,
+  "safeToActivateWithoutMigration": false,
+  "operatorIncluded": false,
+  "safeToUploadAsLegacyDefaultStage": true,
+  "safeToEnableSparkWithoutMigration": false
+}
