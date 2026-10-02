@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f6f2ec">
+<meta name="discipline-release" content="legacy-wallet-v1-2026-10-02">
 <title>Discipline</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
 <style>
@@ -479,89 +480,44 @@ const DEF_SETTINGS = {approveChores:true, requireKidPin:false, stepOrder:true, p
                       autoHome:true, autoHomeSec:5, idleHome:true, idleSec:60,
                       rewardsV4:true, eveningV1:true, potFixV1:true, parentPin:'1234',
                       shareSmallV1:true, rewardsV5:true, funV1:true, soundOn:true, tamaV1:true, treatCost:3, treatMax:2, maxGiveDay:50,
-                      /* ---- 🏦 ธนาคารแต้ม ----
-                         ตัวเลขชุดนี้คุมไม่ให้แต้มเฟ้อ: ดอกฝากผลิตแต้มใหม่ได้สูงสุด
-                         🎈 200×10%/14วัน = 10/สัปดาห์ (2.5% ของรายได้ 400)
-                         💎 400×15%/30วัน = 14/สัปดาห์ (5.3% ของรายได้ ~265)
-                         และดอกยืม (10% ของ 340 = 34 ต่อครั้ง) เผาแต้มทิ้งเกือบหักล้างกันพอดี
-                         กฎเหล็กกันช่องโหว่: ดอกยืมต้องสูงกว่าดอกฝากเสมอ
-                         และห้ามมีหนี้กับเงินฝากพร้อมกัน (ไม่งั้นฝากกินดอกแล้วยืมมาใช้ = แต้มฟรี) */
+                      /* กติกาใหม่สำหรับสัญญาใหม่; สัญญาเก่าเก็บ rate และ dueTs เดิม */
                       bankOn:true, bankV1:true,
-                      loanCap:340, loanPct:10, loanDays:14, loanLatePct:2, loanMaxPct:30, loanRepayPct:50,
-                      depDaily:'3:2,7:5,14:12', depCapDaily:200,
-                      depExtra:'7:2,14:6,30:15', depCapExtra:400,
-                      /* ---- ช่องทำกำไรที่ "ตั้งใจเปิดไว้" ให้เด็กที่คิดเป็นหาเจอเอง ----
-                         กติกาทุกข้อประกาศไว้ครบในแอป แต่ไม่บอกว่าเอามาต่อกันแล้วได้อะไร
-                         1) ปลอดดอก 3 วันแรก + ฝากขณะมีหนี้ได้เฉพาะบัญชีที่ครบก่อนหมดช่วงปลอดดอก
-                            → ยืม 340 เอาไปฝากขั้น 3 วัน ได้ +4 แต้ม แต่ช้าไป 1 วัน = ติดดอก 34
-                            ขั้นอื่นขาดทุนเสมอ (ดอกฝากสูงสุด 24 < ดอกยืม 34) จึงไม่ต้องเขียนกฎห้ามเพิ่ม
-                         2) เงินฝากของสองพี่น้องครบกำหนดวันเดียวกัน + ล็อก ≥14 วัน → โบนัสทั้งคู่
-                            ใครถอนก่อนกำหนด อีกคนก็อดโบนัสไปด้วย
-                         3) พี่น้องเอาแต้มมาค้ำ 50% ของยอดยืม → ดอกยืมลดครึ่ง
-                            แต่เลยกำหนดเมื่อไหร่ หลักประกันโดนยึดปิดหนี้ทันที */
-                      arbV1:true, fridayV1:true, morningV1:true, morningV2:true, morningV3:true, urgentMin:15, loanGraceDays:3, loanPerWeek:1,
+                      loanCap:300, loanPct:10, loanDays:14, loanLatePct:0, loanMaxPct:10, loanRepayPct:50,
+                      depDaily:'7:1,30:5', depCapDaily:0,
+                      depExtra:'7:1,30:5', depCapExtra:0,
+                      /* ฟิลด์เก่าเก็บไว้เพื่ออ่านสัญญาและประวัติเดิม */
+                      arbV1:true, fridayV1:true, morningV1:true, morningV2:true, morningV3:true, urgentMin:15, loanGraceDays:0, loanPerWeek:1,
                       coDepBonusPct:2, coDepBonusMax:5, coDepMinDays:14,
-                      cosignOn:true, cosignPct:50, cosignDiscount:50};
+                      cosignOn:false, cosignPct:50, cosignDiscount:50};
 const mkChore = c => Object.assign(
-  {id:uid(), once:true, from:'', due:'', grace:10, latePct:50, routine:true, by:'kid',
+  {id:uid(), once:true, from:'', due:'', grace:15, latePct:50, routine:true, by:'kid',
    extra:false, all:false, chain:true, days:ALLDAYS.slice()}, c);
-/* กิจวัตรหลัก รวมกันต้องได้ 100 แต้มพอดี = คะแนนเต็มของวัน (ใช้ซื้อรางวัลเล็ก)
-   เรียงแต้มตามลำดับความสำคัญ แต่ไม่ให้ห่างกันมาก (20 → 10) */
+/* งานเริ่มต้นรุ่นกระเป๋าเดียว */
 const DEF_CHORES = [
-  mkChore({name:'ถึงโรงเรียนตรงเวลา',    emo:'🏫', pts:20, due:'08:00', days:WEEKDAYS, by:'parent'}),
-  /* การบ้านของวันศุกร์ยกไปทำวันอาทิตย์ได้ แต่ได้แค่ครึ่งเดียว (carryDay 0 = อาทิตย์)
-     ถ้าทำวันศุกร์ไปแล้ว วันอาทิตย์จะไม่โผล่ให้ทำซ้ำ */
-  mkChore({name:'ทำการบ้านเสร็จ',         emo:'✏️', pts:18, from:'17:00', due:'20:00', days:WEEKDAYS,
-           chain:false, carryDay:0, carryPct:50}),
-  /* งานเตรียมของ = ทำ "คืนก่อนวันเรียน" เท่านั้น → ศุกร์เย็นไม่ต้องทำ ไปทำอาทิตย์แทน เต็มแต้ม */
-  mkChore({name:'เก็บกระเป๋าพร้อมพรุ่งนี้', emo:'🎒', pts:16, from:'17:00', due:'20:00', days:SCHOOLNIGHT, chain:false}),
-  mkChore({name:'เตรียมชุดวันพรุ่งนี้',    emo:'👕', pts:14, from:'17:00', due:'20:00', days:SCHOOLNIGHT, chain:false}),
-  mkChore({name:'ตื่นนอน ลุกจากเตียง',    emo:'⏰', pts:12, from:'05:00', due:'06:40', days:WEEKDAYS}),
-  mkChore({name:'กินข้าวเช้าเสร็จ',        emo:'🍳', pts:10, from:'06:30', due:'07:25', days:WEEKDAYS}),
-  /* ---- ชุดเช้ารวมเป็นงานเดียว: อาบน้ำ + แปรงฟัน + แต่งตัว เสร็จก่อน 07:15 ---- */
-  mkChore({name:'อาบน้ำ แปรงฟัน แต่งตัวเสร็จ', emo:'🚿', pts:10, from:'06:00', due:'07:15',
-           days:WEEKDAYS, chain:false}),
-  /* ---- งานเสริม → เข้ากระเป๋า "แต้มพิเศษ" สำหรับรางวัลใหญ่เท่านั้น (เรียงตามความสำคัญ) ---- */
-  mkChore({name:'วันนี้ไม่ทำให้แม่ต้องเสียงดัง', emo:'🤫', pts:15,
-           routine:false, extra:true, by:'parent', all:true}),
-  mkChore({name:'พูดอังกฤษกับพ่อแม่ 10 นาที', emo:'🗣️', pts:12,
-           routine:false, extra:true, by:'parent'}),
-  mkChore({name:'เรียนหมากรุก 30 นาที',   emo:'♟️', pts:10, from:'16:00', due:'20:00',
-           routine:false, extra:true, days:[1,3,5]}),
-  mkChore({name:'อ่านหนังสือ 20 นาที',    emo:'📚', pts:8, from:'18:30', due:'20:30',
-           routine:false, extra:true, days:WEEKDAYS}),
-  mkChore({name:'เก็บที่นอนหลังตื่น',      emo:'🛏️', pts:7, from:'05:00', due:'07:30',
-           routine:false, extra:true}),
-  mkChore({name:'เล่นแล้วเก็บของเข้าที่เอง (ไม่ต้องบอก)', emo:'🧸', pts:5,
-           routine:false, extra:true, by:'parent'}),
-  mkChore({name:'ช่วยงานบ้าน',            emo:'🧹', pts:5, once:false, routine:false, extra:true})
+  mkChore({id:'v1-wake', name:'ตื่นและลุกจากเตียง', emo:'⏰', pts:20, due:'07:00', dueHoliday:'08:00', days:ALLDAYS, chain:false}),
+  mkChore({id:'v1-bed', name:'เก็บที่นอน', emo:'🛏️', pts:10, due:'07:10', dueHoliday:'08:10', days:ALLDAYS, chain:false}),
+  mkChore({id:'v1-school', name:'พร้อมออกจากบ้านไปโรงเรียน', emo:'🏫', pts:30, due:'07:45', days:WEEKDAYS, by:'parent'}),
+  mkChore({id:'v1-homework', name:'Homework / assignment', emo:'✏️', pts:40, from:'17:00', due:'19:00', days:WEEKDAYS, chain:false}),
+  mkChore({id:'v1-piano', name:'Piano 20 นาที', emo:'🎹', pts:50, from:'16:00', due:'20:30', days:ALLDAYS, chain:false, routine:false, practice:true}),
+  mkChore({id:'v1-chess', name:'Chess 20 นาที', emo:'♟️', pts:50, from:'16:00', due:'20:30', days:ALLDAYS, chain:false, routine:false, practice:true}),
+  mkChore({id:'v1-taekwondo', name:'Taekwondo 20 นาที', emo:'🥋', pts:50, from:'16:00', due:'20:30', days:ALLDAYS, chain:false, routine:false, practice:true}),
+  mkChore({id:'v1-sleep', name:'เตรียมตัวเสร็จและปิดไฟ', emo:'🌙', pts:20, due:'21:00', days:ALLDAYS, chain:false})
 ];
-/* all:true = หักทุกคนพร้อมกัน (เรื่องที่ผิดทั้งคู่ ไม่ต้องหาว่าใครเริ่ม) */
 const DEF_PENALTIES = [
-  {id:uid(), name:'ไม่เก็บของ ทิ้งเกลื่อน', emo:'🧺', pts:5,  all:false},
-  {id:uid(), name:'ต้องเรียกเกิน 3 ครั้ง',  emo:'📢', pts:10, all:false},
-  {id:uid(), name:'ทะเลาะกับพี่น้อง',       emo:'⚡', pts:10, all:true},
-  {id:uid(), name:'เถียง/พูดไม่เพราะ',      emo:'😤', pts:15, all:false},
-  {id:uid(), name:'เล่นเกินเวลาที่ตกลง',     emo:'⏰', pts:15, all:false}
+  {id:'v1-pen-screen',name:'ใช้จอเกินเวลาที่ตกลง',emo:'⏰',pts:20,all:false},
+  {id:'v1-pen-physical',name:'ทำร้ายคนหรือทำลายของ',emo:'⚠️',pts:30,all:false}
 ];
-/* รางวัลเล็ก ใช้ "แต้มประจำวัน" · รางวัลใหญ่ ใช้ "แต้มพิเศษ" เท่านั้น (share = หารกันจ่ายได้)
-   limitDay / limitWeek = เพดานจำนวนครั้ง (0 = ไม่จำกัด) */
+/* รางวัลเริ่มต้นรุ่นกระเป๋าเดียว */
 const DEF_REWARDS = [
-  /* รางวัลจอทั้ง 3 อัน "หารกันได้" = ดูด้วยกัน จ่ายคนละครึ่ง → ดันให้ใช้จอเดียวกันแทนแยกจอ
-     โควตารายสัปดาห์ของ YouTube/เกม เป็นตัวคุมเวลาจอบันเทิงไม่ให้เกิน ~5 ชม./สัปดาห์
-     ส่วน Educational ตั้งใจให้ถูกสุดและไม่จำกัดรายสัปดาห์ */
-  {id:uid(), name:'Educational YouTube 30 นาที', emo:'📚', cost:40, big:false, share:true, limitDay:1, limitWeek:0},
-  {id:uid(), name:'เล่นเกม 30 นาที',   emo:'🎮', cost:50,  big:false, share:true,  limitDay:1, limitWeek:5},
-  {id:uid(), name:'YouTube 30 นาที',  emo:'📺', cost:70,  big:false, share:true,  limitDay:1, limitWeek:5},
-  {id:uid(), name:'นอนดึกได้ 1 ชม.',   emo:'🌙', cost:100, big:false, share:false, limitDay:1, limitWeek:2},
-  {id:uid(), name:'Swensen',          emo:'🍨', cost:140, big:false, share:true,  limitDay:1, limitWeek:2},
-  {id:uid(), name:'Dinner out ไปกินข้าวนอกบ้าน', emo:'🍽️', cost:140, big:false, share:true, limitDay:1, limitWeek:2},
-
-  {id:uid(), name:'ของเล่นงบ 200 บาท',  emo:'🧸', cost:150,  big:true, share:false, limitDay:0, limitWeek:0},
-  {id:uid(), name:'ของเล่นงบ 500 บาท',  emo:'🎁', cost:280,  big:true, share:false, limitDay:0, limitWeek:0},
-  {id:uid(), name:'Movie day',          emo:'🍿', cost:560,  big:true, share:true,  limitDay:0, limitWeek:0},
-  {id:uid(), name:'ของเล่นงบ 1,000 บาท', emo:'🚲', cost:700,  big:true, share:false, limitDay:0, limitWeek:0},
-  {id:uid(), name:'ไปเที่ยว Space',      emo:'🌌', cost:6000, big:true, share:true,  limitDay:0, limitWeek:0}
+  {id:'v1-youtube', name:'YouTube 30 นาที', emo:'📺', cost:100, big:false, share:true, group:'screen', limitDay:1, limitWeek:4},
+  {id:'v1-game', name:'เกม 30 นาที', emo:'🎮', cost:100, big:false, share:true, group:'screen', limitDay:1, limitWeek:4},
+  {id:'v1-dinner', name:'เลือก Dinner', emo:'🍽️', cost:300, big:false, share:true, group:'dinner', limitDay:0, limitWeek:2},
+  {id:'v1-icecream', name:'Ice cream', emo:'🍨', cost:300, big:false, share:true, group:'icecream', limitDay:0, limitWeek:2},
+  {id:'v1-toy200', name:'ของเล่นงบ 200 บาท', emo:'🧸', cost:1000, big:true, share:false, group:'toy200', cooldownMonths:6, limitDay:0, limitWeek:0},
+  {id:'v1-toy500', name:'ของเล่นงบ 500 บาท', emo:'🎁', cost:3000, big:true, share:false, group:'toy500', cooldownMonths:6, limitDay:0, limitWeek:0},
+  {id:'v1-toy1000', name:'ของเล่นงบ 1,000 บาท', emo:'🚲', cost:6000, big:true, share:false, group:'toy1000', cooldownMonths:6, limitDay:0, limitWeek:0},
+  {id:'v1-sea', name:'ไปเที่ยวทะเล', emo:'🏖️', cost:10000, big:true, share:true, group:'trip', limitDay:0, limitWeek:0},
+  {id:'v1-abroad', name:'ไปเที่ยวต่างประเทศ', emo:'✈️', cost:30000, big:true, share:true, group:'trip', limitDay:0, limitWeek:0}
 ];
 const DEF_KIDS = [
   {id:uid(), name:'ลูกคนโต', emo:'🦊', photo:'', pin:'1111', color:KID_COLORS[0], points:0, extra:0},
@@ -641,42 +597,62 @@ function daysLabel(c){
 /* ---------- ตรรกะแต้ม ---------- */
 const cfg = () => S.settings;
 const kidById = id => S.kids.find(k => k.id === id);
-/* ---- แต้มมี 2 กระเป๋า ----
-   daily = แต้มประจำวันจากกิจวัตรหลัก → ใช้ซื้อรางวัลเล็ก
-   extra = แต้มพิเศษจากงานเสริม + โบนัสทำครบตรงเวลา → ใช้ซื้อรางวัลใหญ่เท่านั้น  */
-const POT_FIELD = {daily:'points', extra:'extra'};
-const POT_NAME  = {daily:'แต้มประจำวัน', extra:'แต้มพิเศษ'};
-const balance = (kidId, pot) => Number((kidById(kidId)||{})[POT_FIELD[pot||'daily']] || 0);
+/* Wallet v1: อ่านยอดเดิม points + extra แบบ 1:1 ทุกครั้ง ไม่มีการ copy ยอด จึงนับซ้ำไม่ได้
+   extra เป็น legacy field ที่อ่านได้เท่านั้น; งานและรายการใหม่เขียนลง points */
+const POT_FIELD = {daily:'points', extra:'points'};
+const POT_NAME  = {daily:'แต้ม', extra:'แต้ม'};
+const balance = kidId => {
+  const k = kidById(kidId) || {};
+  return Number(k.points || 0) + Number(k.extra || 0);
+};
 /* จองแต้มที่ยังรออนุมัติไว้ก่อน — คำขอแลกรางวัล (ทั้งคนขอและคนช่วยหาร)
    และคำขอแบ่งแต้มให้พี่น้อง (จองเฉพาะฝั่งคนให้) จะได้ไม่ใช้แต้มก้อนเดียวกันซ้ำ */
-const reserved = (kidId, pot) => S.pending.filter(p => (p.pot||'daily') === (pot||'daily')
-                          && ( (p.type==='reward'   && (p.kidId===kidId || p.partnerId===kidId))
+const reserved = kidId => S.pending.filter(p => ( (p.type==='reward'   && (p.kidId===kidId || p.partnerId===kidId))
                             || (p.type==='transfer' &&  p.kidId===kidId)
                             || (p.type==='join'     &&  p.kidId===kidId) ))
-                          .reduce((s,p)=>s+Number(p.pts),0);
+                          .reduce((s,p)=>s+Number(p.type==='reward' && p.partnerId===kidId
+                            ? (p.partnerPts ?? p.pts) : p.pts),0);
 /* แต้มที่เอาไปค้ำประกันให้พี่น้อง ยังอยู่ในกระเป๋าแต่แตะไม่ได้จนกว่าหนี้จะปิด */
-const held = (kidId, pot) => kidBank(kidId)
-  .filter(b => b.kind==='collateral' && (b.pot||'daily') === (pot||'daily'))
+const held = kidId => kidBank(kidId)
+  .filter(b => b.kind==='collateral')
   .reduce((s,b) => s + Number(b.amount), 0);
-const available = (kidId, pot) => balance(kidId, pot) - reserved(kidId, pot) - held(kidId, pot);
+const available = kidId => balance(kidId) - reserved(kidId) - held(kidId);
 
 /* ---- เพดานจำนวนครั้งของรางวัล ---- */
 function weekStartTs(){
-  const d = new Date(now()); const dow = (d.getDay()+6)%7;   // จันทร์ = ต้นสัปดาห์
-  d.setDate(d.getDate()-dow); d.setHours(0,0,0,0); return d.getTime();
+  const d = new Date(now()+7*3600000), dow = (d.getUTCDay()+6)%7;
+  return dayStartTs()-dow*86400000; // Monday, Asia/Bangkok
 }
-function dayStartTs(){ const d = new Date(now()); d.setHours(0,0,0,0); return d.getTime(); }
+function dayStartTs(){
+  const d = new Date(now()+7*3600000);
+  return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-7*3600000;
+}
 /* โควตารายวันแยกเป็น 2 ถัง — กันเคส "น้องดูเองไปแล้ว พี่กลับมาชวนดูด้วยกัน แล้วน้องกดไม่ได้"
    own = รอบที่ตัวเองเป็นคนเริ่ม · inv = รอบที่พี่น้องชวนมาหาร
    แต่ละถังใช้เพดาน limitDay เท่ากัน → วันหนึ่งจึงได้สูงสุด 2 รอบ แต่เริ่มเองได้แค่ 1
    โควตารายสัปดาห์นับรวมทั้งสองถัง จึงยังคุมเวลาจอรวมไว้เท่าเดิม */
+const rewardGroup = r => {
+  const n = String((r||{}).name||'').replace(/\s*\(หารกัน\)\s*$/,'');
+  if((r||{}).group) return r.group;
+  if(/YouTube|เล่นเกม|เกม 30 นาที/.test(n)) return 'screen';
+  if(/Dinner|ข้าวเย็น/.test(n)) return 'dinner';
+  if(/Swensen|Ice cream/.test(n)) return 'icecream';
+  if(/ของเล่นงบ 200/.test(n)) return 'toy200';
+  if(/ของเล่นงบ 500/.test(n)) return 'toy500';
+  if(/ของเล่นงบ 1,000|ของเล่นงบ 1000/.test(n)) return 'toy1000';
+  return (r||{}).id || '';
+};
+const rewardForEvent = e => S.rewards.find(r => r.id === e.rid) || {name:e.name, id:e.rid};
 function usedTimes(kidId, rid){
   const d = dayStartTs(), w = weekStartTs(), rows = [];
-  S.log.forEach(l => {
-    if(l.kind === 'reward' && l.rid === rid && l.kidId === kidId) rows.push({ts:l.ts, inv: !!l.inv});
+  const target = S.rewards.find(r => r.id === rid) || {id:rid};
+  const group = rewardGroup(target);
+  (S.rewardHistoryReady ? S.rewardHistory : S.log).forEach(l => {
+    if(l.kind === 'reward' && l.kidId === kidId && rewardGroup(rewardForEvent(l)) === group)
+      rows.push({ts:l.ts, inv: !!l.inv});
   });
   S.pending.forEach(p => {
-    if((p.type !== 'reward' && p.type !== 'join') || p.rid !== rid) return;
+    if((p.type !== 'reward' && p.type !== 'join') || rewardGroup(rewardForEvent(p)) !== group) return;
     if(p.kidId === kidId) rows.push({ts:p.ts, inv:false});
     else if(p.partnerId === kidId) rows.push({ts:p.ts, inv:true});
   });
@@ -684,15 +660,24 @@ function usedTimes(kidId, rid){
   return {day: today.length,
           own: today.filter(x => !x.inv).length,
           inv: today.filter(x =>  x.inv).length,
-          week: rows.filter(x => x.ts >= w).length};
+          week: rows.filter(x => x.ts >= w).length,
+          last: rows.reduce((m,x) => Math.max(m, Number(x.ts)||0), 0)};
 }
 /* asInvited = true → เช็กถัง "ถูกชวน" (ใช้ตอนหาว่าใครมาหารกับเราได้บ้าง) */
 function limitLeft(kidId, r, asInvited){
   const u = usedTimes(kidId, r.id);
   const ld = Number(r.limitDay || 0);
-  const dLeft = ld ? ld - (asInvited ? u.inv : u.own) : Infinity;
+  const dLeft = ld ? ld - (rewardGroup(r)==='screen' ? u.day : (asInvited ? u.inv : u.own)) : Infinity;
   const wLeft = Number(r.limitWeek||0) ? Number(r.limitWeek) - u.week : Infinity;
-  return {ok: dLeft > 0 && wLeft > 0, dLeft, wLeft, used:u, invited: !!asInvited};
+  const cooldown = Number(r.cooldownMonths||0) ? (() => {
+    const end = new Date(u.last), day=end.getDate();
+    end.setDate(1); end.setMonth(end.getMonth()+Number(r.cooldownMonths));
+    const lastDay=new Date(end.getFullYear(),end.getMonth()+1,0).getDate();
+    end.setDate(Math.min(day,lastDay));
+    return u.last && now() < end.getTime();
+  })() : false;
+  return {ok: !!S.rewardHistoryReady && dLeft > 0 && wLeft > 0 && !cooldown,
+    dLeft, wLeft, cooldown, used:u, invited: !!asInvited};
 }
 /* ---- แบ่งแต้มให้พี่น้อง: เพดานต่อคนต่อวัน (0 = ไม่จำกัด) ---- */
 const giveCap = () => Number(cfg().maxGiveDay || 0);
@@ -716,7 +701,7 @@ const bankOf = k => Array.isArray((k||{}).bank) ? (k||{}).bank : [];
 const kidBank = kidId => bankOf(kidById(kidId));
 const activeLoan = kidId => kidBank(kidId).find(b => b.kind==='loan');
 const myDeposits = kidId => kidBank(kidId).filter(b => b.kind==='deposit');
-const depositIn = (kidId, pot) => myDeposits(kidId).find(b => b.pot === pot);
+const depositIn = kidId => myDeposits(kidId)[0];
 const depCap = pot => Number(pot==='extra' ? (cfg().depCapExtra||0) : (cfg().depCapDaily||0));
 /* ตารางดอกฝากเก็บเป็นข้อความ "วัน:% , วัน:%" เพื่อให้พ่อแม่แก้เองได้ง่าย */
 function depTiers(pot){
@@ -727,8 +712,9 @@ function depTiers(pot){
 }
 const depInterest = d => Math.floor(Number(d.amount) * Number(d.pct) / 100);
 const matured = d => now() >= Number(d.dueTs);
+const oldBankContract = b => !!(cfg().walletRulesAt && Number(b.openTs) < Number(cfg().walletRulesAt));
 const graceEndOf = ln => Number(ln.openTs) +
-  Number(ln.grace !== undefined ? ln.grace : (cfg().loanGraceDays||0)) * DAYMS;
+  Number(ln.grace !== undefined ? ln.grace : (oldBankContract(ln) ? 3 : (cfg().loanGraceDays||0))) * DAYMS;
 /* ยอดหนี้ ณ ตอนนี้
    • ช่วงปลอดดอก (3 วันแรก) คืนครบ = ไม่เสียดอกเลย
    • พ้นช่วงนั้นคิดดอกเต็มทันที · เลยกำหนดแล้วเดินต่อวันละ loanLatePct จนชนเพดาน loanMaxPct */
@@ -738,8 +724,9 @@ function loanOwed(ln){
   if(now() < gEnd) return {total:base, paid:paid0, left:Math.max(0, base - paid0),
                            late:0, pctNow:0, inGrace:true, graceEnd:gEnd};
   const late = Math.max(0, Math.floor((now() - Number(ln.dueTs)) / DAYMS));
-  const cap  = Math.max(pct0, Number(cfg().loanMaxPct || pct0));
-  const pctNow = Math.min(cap, pct0 + late * Number(cfg().loanLatePct || 0));
+  const oldContract = oldBankContract(ln) || Number(ln.grace||0) > 0;
+  const cap  = Math.max(pct0, Number(ln.maxPct ?? (oldContract ? 30 : cfg().loanMaxPct)));
+  const pctNow = Math.min(cap, pct0 + late * Number(ln.latePct ?? (oldContract ? 2 : cfg().loanLatePct)));
   // คูณก่อนหารร้อย — ถ้าเขียน base*(1+pct/100) ทศนิยมลอยตัวจะเพี้ยน (340*1.1 = 374.0000000000001)
   const total = base + Math.ceil(base * pctNow / 100);
   return {total, paid:paid0, left: Math.max(0, total - paid0),
@@ -753,6 +740,7 @@ function loansThisWeek(kidId){
 }
 /* โบนัสฝากคู่: เงินฝากของพี่น้องที่ครบกำหนด "วันเดียวกัน" และล็อกยาวพอทั้งคู่ */
 function coDepPartner(kidId, d){
+  if(!oldBankContract(d)) return null;
   const minD = Number(cfg().coDepMinDays || 0);
   if(!Number(cfg().coDepBonusPct) || Number(d.days) < minD) return null;
   const day = dstr(d.dueTs);
@@ -801,10 +789,18 @@ function bankReport(days){
           pct: earned ? Math.round(net/earned*1000)/10 : 0};
 }
 
+const taskKey = name => ({
+  'ตื่นนอน ลุกจากเตียง':'ตื่นและลุกจากเตียง',
+  'เก็บที่นอนหลังตื่น':'เก็บที่นอน',
+  'ถึงโรงเรียนตรงเวลา':'พร้อมออกจากบ้านไปโรงเรียน',
+  'ทำการบ้านเสร็จ':'Homework / assignment',
+  'ซ้อม Piano20 นาที':'Piano 20 นาที',
+  'เรียนหมากรุก 30 นาที':'Chess 20 นาที'
+})[name] || name;
 function doneToday(kidId, name){
   const t = todayStr();
-  return S.log.some(l => l.kidId===kidId && l.kind==='chore' && l.name===name && dstr(l.ts)===t)
-      || S.pending.some(p => p.kidId===kidId && p.type==='chore' && p.name===name && dstr(p.ts)===t);
+  return S.log.some(l => l.kidId===kidId && l.kind==='chore' && taskKey(l.name)===taskKey(name) && dstr(l.ts)===t)
+      || S.pending.some(p => p.kidId===kidId && p.type==='chore' && taskKey(p.name)===taskKey(name) && dstr(p.ts)===t);
 }
 /* ---------- งานยกยอด (carry) ----------
    งานบางอย่างของวันธรรมดายกไปทำอีกวันได้ เช่น การบ้านวันศุกร์ → วันอาทิตย์ แต่ได้แต้มไม่เต็ม
@@ -819,6 +815,10 @@ const isCarryToday = c => isCarryDow(c, new Date(now()).getDay());
 const ptsOn = (c, dow) => isCarryDow(c, dow)
   ? Math.max(1, Math.round(Number(c.pts) * Number(c.carryPct || 100) / 100)) : Number(c.pts);
 const ptsToday = c => ptsOn(c, new Date(now()).getDay());
+const dueFor = (c, ts=now()) => {
+  const day = new Date(ts).getDay();
+  return (day===0 || day===6) && c.dueHoliday ? c.dueHoliday : c.due;
+};
 /* วันต้นทางของงานยกยอด = วันทำงานล่าสุดก่อนถึง carryDay */
 function carrySrcDow(c){
   if(!hasCarry(c)) return -1;
@@ -850,17 +850,19 @@ const appliesFor = (kidId, c, d) => appliesOn(c, d) && !carryDone(kidId, c);
 function evalTiming(c, t){
   t = t === undefined ? now() : t;
   const full = ptsOn(c, new Date(t).getDay());     // วันยกยอดได้แต้มไม่เต็ม
-  if(!c.due) return {status:'', lateMin:0, pts:full};
-  const late = Math.round((t - dueDateOf(c.due, t))/60000);
+  const due = dueFor(c,t);
+  if(!due) return {status:'', lateMin:0, pts:full};
+  const lateMs = t - dueDateOf(due, t);
+  const late = Math.max(0, Math.ceil(lateMs/60000));
   if(late <= 0) return {status:'ontime', lateMin:0, pts:full};
-  if(late <= Number(c.grace||10))
-    return {status:'late', lateMin:late, pts:Math.max(1, Math.round(full*Number(c.latePct||50)/100))};
+  if(lateMs <= Number(c.grace ?? 15)*60000)
+    return {status:'late', lateMin:late, pts:Math.floor(full*Number(c.latePct ?? 50)/100)};
   return {status:'toolate', lateMin:late, pts:0};
 }
 const STATUS_TXT = {ontime:'ทันเวลา', late:'สายนิดหน่อย', toolate:'สายเกินไป'};
 const STATUS_COL = {ontime:'var(--good)', late:'var(--gold)', toolate:'var(--warn)'};
 const windowOpen = c => !c.from || now() >= dueDateOf(c.from).getTime();
-const dueKey = c => c.due || '99:99';
+const dueKey = c => dueFor(c) || '99:99';
 const chainToday = () => S.chores.filter(c => c.routine && c.by==='kid' && c.chain !== false && appliesOn(c))
   .sort((a,b) => dueKey(a) < dueKey(b) ? -1 : dueKey(a) > dueKey(b) ? 1 : 0);
 function blockedBy(c, kidId){
@@ -893,10 +895,7 @@ function nextDowTs(dow){                 // timestamp ของวัน dow ใ
    ทำให้โบนัสรวมทั้งสัปดาห์เท่าเดิม ไม่ว่าจะย้ายงานไปวันไหน (กันแต้มเฟ้อ) */
 function bonusFor(kidId){
   const b = Number(cfg().perfectBonus || 0); if(!b) return 0;
-  const peak = weekPeakRoutine(); if(!peak) return 0;
-  const mine = routineFor(kidId).reduce((s,c) => s + ptsToday(c), 0);
-  if(mine <= 0) return 0;
-  return Math.max(1, Math.round(b * mine / peak));
+  return routineFor(kidId).length ? b : 0;
 }
 function routineProgress(kidId){
   const list = routineFor(kidId);
@@ -906,7 +905,7 @@ function routineProgress(kidId){
 /* คะแนนวันนี้ = ได้กี่แต้มจากกิจวัตร เทียบกับแต้มเต็มที่เป็นไปได้ (รวมโบนัสตรงเวลาครบ) */
 function todayScore(kidId){
   const routine = routineFor(kidId);
-  const names = {}; routine.forEach(c => { names[c.name] = true; });
+  const names = {}; routine.forEach(c => { names[taskKey(c.name)] = true; });
   const max = routine.reduce((s,c) => s + ptsToday(c), 0);
   const t = todayStr();
   const mine = S.log.filter(l => l.kidId===kidId && dstr(l.ts)===t);
@@ -914,7 +913,7 @@ function todayScore(kidId){
   mine.forEach(l => {
     const d = Number(l.delta);
     if(l.kind === 'bonus') extra += d;
-    else if(l.kind === 'chore') { if(names[l.name]) core += d; else extra += d; }
+    else if(l.kind === 'chore') { if(names[taskKey(l.name)]) core += d; else extra += d; }
     else if(l.kind === 'penalty' || (l.kind === 'adjust' && d < 0)) minus += d;
     else if(l.kind === 'adjust' && d > 0) extra += d;
   });
@@ -969,8 +968,8 @@ async function addLog(entry){
   if(Object.keys(u).length) b.update(dref('kids', entry.kidId), u);
   await b.commit();
   if(earn) await afterEarn(entry.kidId, xp0, d, warm0, warm);
-  // ได้แต้มประจำวันมาใหม่ → หักใช้หนี้อัตโนมัติทันที (bankCommit ไม่วิ่งผ่านตรงนี้ จึงไม่วน)
-  if(bankOn() && (entry.pot||'daily') === 'daily' && d > 0)
+  // ได้แต้มมาใหม่ → หักใช้หนี้อัตโนมัติทันที (bankCommit ไม่วิ่งผ่านตรงนี้ จึงไม่วน)
+  if(bankOn() && (entry.kind === 'chore' || entry.kind === 'bonus') && d > 0)
     await autoRepay(entry.kidId, d);
 }
 /* หลังได้แต้ม: เช็กเลเวลอัพ แล้วเช็กไข่แตก (S ยังไม่ทันอัปเดตจาก snapshot จึงคำนวณจากค่าก่อนหน้า + ที่เพิ่งได้) */
@@ -1019,7 +1018,7 @@ async function checkPerfectDay(kidId){
   if(!allOnTime) return false;
   if(S.log.some(l => l.kidId===kidId && l.kind==='bonus' && dstr(l.ts)===t)) return false;
   await addLog(logEntry(kidId, 'bonus', 'ตรงเวลาครบทั้งวัน 🎉', '🏅', bonus, {pot:'extra'}));
-  toast(`สุดยอด! ตรงเวลาครบทุกอย่าง +${bonus} แต้มพิเศษ 🏅`);
+  toast(`สุดยอด! ตรงเวลาครบทุกอย่าง +${bonus} แต้ม 🏅`);
   return true;
 }
 /* ---------- 🔊 เสียง: สังเคราะห์สดด้วย WebAudio ไม่ต้องโหลดไฟล์เสียงเลย ---------- */
@@ -1203,7 +1202,7 @@ function viewPick(){
       <div style="display:flex;justify-content:center">${avatar(k, 92)}</div>
       <div class="nm" style="color:${k.color}">${esc(k.name)}</div>
       <div class="pt" style="font-size:12px">${L.emo} Lv.${L.lv} · ${esc(L.name)}</div>
-      <div class="pt">🎈 ${available(k.id,'daily')} · 💎 ${available(k.id,'extra')}</div>
+      <div class="pt">⭐ ${available(k.id)} แต้ม</div>
       <div class="pt" style="font-size:12px">${pr.total?`วันนี้ ${todayScore(k.id).pct}%`:'วันหยุด'}</div>
       <div class="pets" style="justify-content:center">${
         (Array.isArray(k.pets)?k.pets:[]).slice(-6).map(x => `<span>${x}</span>`).join('')
@@ -1214,7 +1213,7 @@ function viewPick(){
     <div style="text-align:center;padding:22px 0 16px">
       <div class="clock" style="font-size:34px;color:var(--navy)">${fmtClock(now())}</div>
       <h1 style="margin-top:6px">Discipline</h1>
-      <div class="muted">ทำครบ ตรงเวลา ได้รางวัล</div></div>
+      <div class="muted">ทำครบ ตรงเวลา ได้รางวัล · ⭐ กระเป๋าแต้มเดียว</div></div>
     <div class="grid">${tiles || '<div class="empty">ยังไม่มีเด็ก — เข้าโหมดผู้ปกครองเพื่อเพิ่ม</div>'}</div>
     ${homeFeed()}
     <div style="text-align:center;margin-top:20px">
@@ -1311,8 +1310,8 @@ function cdText(leftMin, lateMin, pts, due){
   return {num:lateMin, lab:`นาที<small>สายแล้ว${pts>0?` · ได้ ${pts} แต้ม`:' · หมดเวลา'}${to}</small>`};
 }
 function countdown(c){
-  if(!c.due) return '';
-  const due = dueDateOf(c.due).getTime();
+  if(!dueFor(c)) return '';
+  const due = dueDateOf(dueFor(c)).getTime();
   const start = c.from ? dueDateOf(c.from).getTime() : due - 60*60000;   // ไม่มีเวลาเริ่ม → ถือว่า 1 ชม.
   const span = Math.max(60000, due - start);
   const elapsed = Math.min(span, Math.max(0, now() - start));
@@ -1323,10 +1322,10 @@ function countdown(c){
   const anim = running
     ? `animation-duration:${secs}s;animation-delay:-${delay}s`
     : 'animation:none';
-  const txt = cdText(leftMin, t.lateMin, t.pts, c.due);
+  const txt = cdText(leftMin, t.lateMin, t.pts, dueFor(c));
   const pct = running ? Math.max(0, Math.min(100, Math.round((due - now())/span*100))) : 0;
   return `<div class="cd ${cdStage(leftMin)}" data-due="${due}" data-span="${span}"
-    data-to="${c.due}" data-grace="${Number(c.grace||10)}" data-lp="${Math.max(1, Math.round(Number(ptsToday(c))*Number(c.latePct||50)/100))}">
+    data-to="${dueFor(c)}" data-grace="${Number(c.grace ?? 15)}" data-lp="${Math.floor(Number(ptsToday(c))*Number(c.latePct ?? 50)/100)}">
     <div class="cd-top">
       <span class="cd-num">${txt.num}</span>
       <span class="cd-lab">${txt.lab}</span>
@@ -1376,7 +1375,7 @@ function choreRow(c, kidId){
     btn = '';
   }else if(c.by === 'parent'){
     state = '👩';
-    sub = c.due ? `<span class="bignum">${c.due}</span>` : '';
+    sub = dueFor(c) ? `<span class="bignum">${dueFor(c)}</span>` : '';
     cls = 'locked';
     btn = '';
   }else if(early){
@@ -1390,19 +1389,19 @@ function choreRow(c, kidId){
     cls = 'locked';
     btn = '';
   }else{
-    const mins = c.due ? Math.round((dueDateOf(c.due) - now())/60000) : null;
-    if(!c.due){ state = '👉'; sub = ''; cls = 'ready'; }
+    const mins = dueFor(c) ? Math.round((dueDateOf(dueFor(c)) - now())/60000) : null;
+    if(!dueFor(c)){ state = '👉'; sub = ''; cls = 'ready'; }
     else if(mins > 0){ state = '👉'; cls = 'ready';
-      sub = `<span class="bignum">${c.due}</span> <span style="color:var(--good)">${mins}′</span>`; }
+      sub = `<span class="bignum">${dueFor(c)}</span> <span style="color:var(--good)">${mins}′</span>`; }
     else if(t.status === 'late'){ state = '⚠️'; cls = 'warn';
-      sub = `<span class="bignum">${c.due}</span> <span style="color:var(--gold)">+${t.lateMin}′</span>`; }
+      sub = `<span class="bignum">${dueFor(c)}</span> <span style="color:var(--gold)">+${t.lateMin}′</span>`; }
     else { state = '⚠️'; cls = 'warn';
-      sub = `<span class="bignum">${c.due}</span> <span style="color:var(--warn)">+${t.lateMin}′</span>`; }
+      sub = `<span class="bignum">${dueFor(c)}</span> <span style="color:var(--warn)">+${t.lateMin}′</span>`; }
     btn = `<button class="btn-good btn-done" onclick="doChore('${c.id}')">✓ Done</button>`;
   }
-  const shownPts = (!used && c.due) ? t.pts : Number(c.pts);
+  const shownPts = (!used && dueFor(c)) ? t.pts : Number(c.pts);
   // โชว์แท่งเวลาเฉพาะงานที่ "กดได้ตอนนี้" และมีเส้นตาย — งานที่ทำแล้ว/ยังไม่ถึงเวลา/ล็อกคิว ไม่ต้องรก
-  const timer = (!used && !early && !prev && c.by !== 'parent' && c.due) ? countdown(c) : '';
+  const timer = (!used && !early && !prev && c.by !== 'parent' && dueFor(c)) ? countdown(c) : '';
   return `<div class="item ${cls}" style="${timer?'flex-wrap:wrap':''}">
     <div class="emo">${c.emo}</div>
     <div class="txt"><b>${esc(c.name)}</b><span class="muted">${sub}</span></div>
@@ -1440,7 +1439,7 @@ function todayCard(k){
     </div>
     ${taskStrip(k.id)}
     ${(s.extra || s.waiting || s.minus) ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">
-      ${s.extra   ? `<span class="tag tag-cost">💎 +${s.extra} แต้มพิเศษวันนี้</span>` : ''}
+      ${s.extra   ? `<span class="tag tag-cost">💎 +${s.extra} แต้มวันนี้</span>` : ''}
       ${s.waiting ? `<span class="tag tag-wait">รอตรวจอีก ${s.waiting}</span>` : ''}
       ${s.minus   ? `<span class="tag tag-minus">${s.minus} จากการหักแต้ม</span>` : ''}
     </div>` : ''}
@@ -1449,7 +1448,7 @@ function todayCard(k){
 function viewKid(){
   const k = kidById(view.kidId);
   if(!k){ view.screen='pick'; return viewPick(); }
-  const availD = available(k.id, 'daily'), availE = available(k.id, 'extra');
+  const availD = available(k.id);
   const avail = availD;
   const myPend = S.pending.filter(p => p.kidId===k.id || p.partnerId===k.id);
   const tabs = [['chores','วันนี้'],['rewards','ของรางวัล'],['zoo','🐾 คอกสัตว์'],['adventure','🧭 ผจญภัย']]
@@ -1501,27 +1500,31 @@ function viewKid(){
         <span style="font-size:19px">${p.emo}</span>
         <span style="flex:1">${esc(p.name)}<span class="muted" style="display:block">${
           p.partnerId ? `หารกับ ${esc((other||{}).name||'')} · ` : ''}${mine?'':'ช่วยจ่าย · '}ขอเมื่อ ${timeAgo(p.ts)}</span></span>
-        <span class="tag tag-cost">−${p.pts}</span></div>`;
+        <span class="tag tag-cost">−${mine ? p.pts : (p.partnerPts ?? p.pts)}</span></div>`;
       }).join('')}</div>` : '';
     const rewardRow = r => {
       const pot = potOf(r), have = available(k.id, pot);
       const half = Math.ceil(Number(r.cost)/2);
-      const price = r.share ? half : Number(r.cost);
+      const price = Number(r.cost);
       const lim = limitLeft(k.id, r);
-      const can = have >= price && lim.ok;
+      const canShare = r.share && S.kids.some(x => x.id!==k.id &&
+        have>0 && available(x.id)>0 && have+available(x.id)>=price && limitLeft(x.id,r,true).ok);
+      const can = (have >= price || canShare) && lim.ok;
       // พี่น้องที่ยัง "ถูกชวน" ได้ (ต่อให้เขาดูเองไปแล้ววันนี้)
       const mates = r.share ? S.kids.filter(x => x.id !== k.id
-        && available(x.id, pot) >= half && limitLeft(x.id, r, true).ok) : [];
+        && available(x.id, pot)>0 && have+available(x.id,pot)>=price && limitLeft(x.id, r, true).ok) : [];
       let sub;
-      if(!lim.ok) sub = lim.dLeft<=0
+      if(!lim.ok) sub = lim.cooldown ? 'รายการนี้ต้องเว้น 6 เดือนก่อนแลกซ้ำ'
+        : lim.dLeft<=0
         ? (mates.length ? `เริ่มเองครบแล้ววันนี้ — รอ${esc(mates[0].name)}ชวนหารได้อีก 1 รอบ` : `วันนี้แลกครบโควตาแล้ว`)
         : `สัปดาห์นี้แลกครบแล้ว (${r.limitWeek} ครั้ง)`;
-      else if(r.share) sub = (have>=price ? `หารกัน คนละ ${half} — แลกได้แล้ว!` : `หารกัน คนละ ${half} · ขาดอีก ${price-have}`)
+      else if(r.share) sub = (canShare ? `หารกัน เริ่มต้นคนละ ${half} · ปรับส่วนแบ่งได้` : have>=price ? 'แลกได้แล้ว!' : `ขาดอีก ${price-have}`)
         + (mates.length ? ` · ชวน${esc(mates[0].name)}ได้` : '');
       else sub = have>=price ? 'แลกได้เลย!' : `อีก ${price-have} แต้ม`;
       const quota = [];
       if(Number(r.limitDay))  quota.push(`วันละ ${r.limitDay}`);
       if(Number(r.limitWeek)) quota.push(`สัปดาห์ละ ${r.limitWeek} (เหลือ ${Math.max(0,lim.wLeft)})`);
+      if(Number(r.cooldownMonths)) quota.push(`เว้น ${r.cooldownMonths} เดือนต่อคน`);
       return `<div class="item" style="${lim.ok?'':'opacity:.5'}"><div class="emo">${r.emo}</div>
         <div class="txt"><b>${esc(r.name)}</b><span class="muted">${sub}${quota.length?' · '+quota.join(' · '):''}</span></div>
         <span class="tag tag-cost">${r.cost}${r.share?' 🤝':''}</span>
@@ -1530,9 +1533,9 @@ function viewKid(){
     const small = S.rewards.filter(r => !r.big);
     const big   = S.rewards.filter(r => r.big);
     body = todayCard(k) + waitBox
-      + `<div class="sec-title">🎈 รางวัลเล็ก — ใช้แต้มประจำวัน (มี ${available(k.id,'daily')})</div>`
+      + `<div class="sec-title">🎁 รางวัลทั่วไป — แต้มที่ใช้ได้ ${available(k.id)}</div>`
       + (small.map(rewardRow).join('') || '<div class="empty">ยังไม่มีรางวัลเล็ก</div>')
-      + `<div class="sec-title">💎 รางวัลใหญ่ — ใช้แต้มพิเศษเท่านั้น (มี ${available(k.id,'extra')}) · 🤝 = หารกันได้</div>`
+      + `<div class="sec-title">⭐ รางวัลใหญ่ — ใช้แต้มเดียวกัน · 🤝 = หารกันได้</div>`
       + (big.map(rewardRow).join('') || '<div class="empty">ยังไม่มีรางวัลใหญ่</div>');
   }else if(view.tab === 'zoo'){
     body = petHome(k) + adventureCard(k) + petCard(k) + petZoo(k);
@@ -1548,27 +1551,22 @@ function viewKid(){
   const streak = onTimeStreak(k.id);
   const xp = Number(k.xp||0), LV = levelOf(xp);
   const xpPct = Math.max(3, Math.min(100, Math.round((xp - LV.at) / Math.max(1, LV.next - LV.at) * 100)));
-  const resD = reserved(k.id,'daily'), resE = reserved(k.id,'extra');
+  const resD = reserved(k.id);
   return `
     <div class="kidbar" style="background:${k.color}">
       ${avatar(k, 54)}
       <div style="flex:1;min-width:0">
         <div class="nm">${esc(k.name)} <span class="lvbadge">${LV.emo} Lv.${LV.lv}</span></div>
-        <div class="pt">${esc(LV.name)} · 🎈 ${availD} · 💎 ${availE}</div>
+        <div class="pt">${esc(LV.name)} · ⭐ ${availD} แต้ม</div>
         <div class="xpbar" title="XP ${xp} / ${LV.next}"><i style="width:${xpPct}%"></i></div>
       </div>
       <button onclick="go('pick')">ออก ✕</button>
     </div>
-    <div class="grid" style="margin-bottom:12px">
+    <div style="margin-bottom:12px">
       <div class="card" style="margin:0;background:linear-gradient(135deg,${k.color}22,var(--card));border:2px solid ${k.color}55">
-        <div class="muted">🎈 แต้มประจำวัน</div>
+        <div class="muted">⭐ แต้มที่ใช้ได้</div>
         <div class="points-big" style="color:${k.color}">${availD}</div>
-        <div class="muted" style="font-size:12px">ไว้แลกรางวัลเล็ก${resD?` · จองไว้ ${resD}`:''}</div>
-      </div>
-      <div class="card" style="margin:0;background:linear-gradient(135deg,var(--gold-soft),var(--card));border:2px solid var(--gold)55">
-        <div class="muted">💎 แต้มพิเศษ</div>
-        <div class="points-big" style="color:var(--gold)">${availE}</div>
-        <div class="muted" style="font-size:12px">ไว้แลกรางวัลใหญ่${resE?` · จองไว้ ${resE}`:''}</div>
+        <div class="muted" style="font-size:12px">รวมแต้มเดิม 1:1 · ใช้แลกรางวัลทุกประเภท${resD?` · จองไว้ ${resD}`:''}</div>
       </div>
     </div>
     ${S.kids.length > 1 ? `<button class="btn-full" style="margin-bottom:12px" onclick="openGive()">
@@ -1612,7 +1610,7 @@ async function doChore(id){
       if(cfg().approveChores){
         const p = {id:uid(), ts:now(), kidId:view.kidId, type:'chore', name:c.name, emo:c.emo,
                    pts:t.pts, full:Number(c.pts), pot: c.routine ? 'daily' : 'extra',
-                   due:c.due||'', status:t.status, lateMin:t.lateMin};
+                   due:dueFor(c)||'', status:t.status, lateMin:t.lateMin};
         await setDoc(dref('pending', p.id), p);
         const pr = routineProgress(view.kidId);
         showFlash({emo:c.emo, title:c.name, big:'ส่งแล้ว ✓', color:'var(--navy)',
@@ -1621,7 +1619,7 @@ async function doChore(id){
           toast:`ส่งแล้ว รอตรวจ ${c.emo}`});
       }else{
         await addLog(logEntry(view.kidId, 'chore', c.name, c.emo, t.pts,
-                              {pot: c.routine ? 'daily' : 'extra', due:c.due||'', status:t.status, lateMin:t.lateMin}));
+                              {pot: c.routine ? 'daily' : 'extra', due:dueFor(c)||'', status:t.status, lateMin:t.lateMin}));
         const gotBonus = await checkPerfectDay(view.kidId);
         const pr = routineProgress(view.kidId);
         showFlash({emo:c.emo, title:c.name,
@@ -1634,7 +1632,13 @@ async function doChore(id){
       }
     }catch(e){ fail(e); }
   };
-  commit();          // กดแล้วบันทึกเลย ไม่ถามซ้ำ — ผลลัพธ์ไปแสดงในหน้าสรุปแทน
+  if(c.practice){
+    openForm({title:`${c.emo} ${c.name}`,fields:[{key:'minutes',label:'ซ้อมแล้วกี่นาที',type:'number',value:20}],
+      async onSave(v){
+        if(Number(v.minutes)<20) return 'ต้องซ้อมอย่างน้อย 20 นาที';
+        setTimeout(commit,0);
+      }});
+  }else commit();
 }
 /* ---------- แลกของรางวัล (รางวัลใหญ่บางอย่างหารกันจ่ายได้) ---------- */
 const potOf = r => r.big ? 'extra' : 'daily';
@@ -1681,6 +1685,7 @@ function joinShare(id){
   }), `${kid.name} ใส่ PIN เพื่อยืนยันว่าจะจ่าย ${half} แต้มร่วมกับ${jt.other.name}`);
 }
 function limitMsg(r, lim){
+  if(lim.cooldown) return `"${r.name}" แลกได้อีกครั้งเมื่อครบ 6 เดือน`;
   if(lim.dLeft <= 0) return lim.invited
     ? `วันนี้ถูกชวนหาร "${r.name}" ครบแล้ว (วันละ ${r.limitDay} ครั้ง)`
     : `วันนี้เริ่ม "${r.name}" เองครบแล้ว (วันละ ${r.limitDay} ครั้ง) — แต่ยังถูกพี่น้องชวนหารได้อีก 1 รอบ`;
@@ -1696,7 +1701,8 @@ function redeem(id){
   const half = Math.ceil(Number(r.cost)/2);
   // คนที่มาหารได้ = ยังมีโควตาถัง "ถูกชวน" เหลือ (แม้เขาจะดูเองไปแล้ววันนี้ก็ยังมาหารรอบใหม่ได้)
   const others = S.kids.filter(x => x.id !== kid.id
-    && available(x.id, pot) >= half && limitLeft(x.id, r, true).ok);
+    && available(x.id,pot)>0 && available(kid.id,pot)+available(x.id,pot)>=Number(r.cost)
+    && limitLeft(x.id, r, true).ok);
   const jt = joinTarget(kid.id, r);          // ตัวเลือกที่ 2: แทรกรอบที่เขาแลกไปแล้ว
   if(r.share && (others.length || jt)){ modal = {kind:'share', r, kid, half, others, pot, jt}; renderModal(); return; }
   if(available(kid.id, pot) < Number(r.cost)){
@@ -1705,19 +1711,32 @@ function redeem(id){
   }
   doRedeem(r, kid, Number(r.cost), null);
 }
-function shareWith(rewardId, partnerId){
+function shareWith(rewardId, partnerId, myPts){
   const r = S.rewards.find(x => x.id===rewardId), kid = kidById(view.kidId);
   const partner = kidById(partnerId);
   if(!r || !kid || !partner) return;
-  const half = Math.ceil(Number(r.cost)/2), pot = potOf(r);
+  const half = myPts === undefined ? Math.ceil(Number(r.cost)/2) : Number(myPts),
+        partnerPts = Number(r.cost) - half, pot = potOf(r);
   modal = null; renderModal();
+  if(!Number.isSafeInteger(half) || half<=0 || partnerPts<=0){ toast('ส่วนแบ่งต้องมากกว่า 0 และรวมตรงกับราคา'); return; }
   if(available(kid.id, pot) < half){ toast(POT_NAME[pot]+'ของหนูยังไม่พอสำหรับครึ่งหนึ่ง'); return; }
-  if(available(partner.id, pot) < half){ toast(`${POT_NAME[pot]}ของ${partner.name}ยังไม่พอ`); return; }
+  if(available(partner.id, pot) < partnerPts){ toast(`${POT_NAME[pot]}ของ${partner.name}ยังไม่พอ`); return; }
   const plim = limitLeft(partner.id, r, true);
   if(!plim.ok){ toast(limitMsg(r, plim).replace('วันนี้', partner.name + ' วันนี้')); return; }
   // ต้องได้รับความยินยอมจากคนที่มาช่วยจ่าย — ให้เขามาใส่ PIN เอง
-  askKidPin(partner, () => doRedeem(r, kid, half, partner),
-            `${partner.name} มาใส่ PIN เพื่อยืนยันว่ายอมช่วยจ่าย ${half} แต้มนะ`);
+  askKidPin(partner, () => doRedeem(r, kid, half, partner, partnerPts),
+            `${partner.name} มาใส่ PIN เพื่อยืนยันว่ายอมช่วยจ่าย ${partnerPts} แต้มนะ`);
+}
+function shareCustom(rewardId, partnerId){
+  const r = S.rewards.find(x => x.id===rewardId);
+  if(!r) return;
+  modal=null; renderModal();
+  openForm({title:'🤝 กำหนดส่วนแบ่ง',fields:[{key:'mine',label:`หนูจ่ายกี่แต้มจาก ${r.cost} (เริ่มที่ 50%)`,
+    type:'number',value:Math.ceil(Number(r.cost)/2)}],async onSave(v){
+    const n=Number(v.mine);
+    if(!Number.isSafeInteger(n)||n<=0||n>=Number(r.cost)) return 'ใส่จำนวนมากกว่า 0 และน้อยกว่าราคาเต็ม';
+    setTimeout(()=>shareWith(rewardId,partnerId,n),0);
+  }});
 }
 function shareAlone(rewardId){
   const r = S.rewards.find(x => x.id===rewardId), kid = kidById(view.kidId);
@@ -1726,19 +1745,20 @@ function shareAlone(rewardId){
   if(available(kid.id, potOf(r)) < Number(r.cost)){ toast('แต้มยังไม่พอถ้าจ่ายคนเดียว'); return; }
   doRedeem(r, kid, Number(r.cost), null);
 }
-function doRedeem(r, kid, pts, partner){
+function doRedeem(r, kid, pts, partner, partnerPts){
   const pn = POT_NAME[potOf(r)];
   const msg = partner
-    ? `หารกับ${partner.name} — จ่าย${pn}คนละ ${pts} รอคุณพ่อคุณแม่อนุมัติก่อนนะ`
+    ? `หารกับ${partner.name} — หนูจ่าย ${pts} แต้ม · ${partner.name}จ่าย ${partnerPts} แต้ม รอคุณพ่อคุณแม่อนุมัติก่อนนะ`
     : `ใช้${pn} ${pts} แต้ม — ต้องรอคุณพ่อคุณแม่อนุมัติก่อนนะ`;
   askKidPin(kid, () => openConfirm(`ขอแลก "${r.name}"`, msg, async () => {
     try{
       const p = {id:uid(), ts:now(), kidId:kid.id, type:'reward', name:r.name, emo:r.emo,
-                 pts:Number(pts), total:Number(r.cost), pot:potOf(r), rid:r.id,
+                 pts:Number(pts), partnerPts:partner ? Number(partnerPts) : 0,
+                 total:Number(r.cost), pot:potOf(r), rid:r.id,
                  partnerId: partner ? partner.id : '', partnerName: partner ? partner.name : ''};
       await setDoc(dref('pending', p.id), p);
       showFlash({emo:r.emo, title:'ส่งคำขอแลกแล้ว',
-        big: partner ? `คนละ ${pts} แต้ม` : `−${pts} แต้ม`, color:'var(--gold)',
+        big: partner ? `${pts} + ${partnerPts} แต้ม` : `−${pts} แต้ม`, color:'var(--gold)',
         sub: partner ? `หารกับ${partner.name} 🤝 รอคุณพ่อคุณแม่อนุมัติ` : 'รอคุณพ่อคุณแม่อนุมัติก่อนนะ',
         toast:'ส่งคำขอแล้ว รออนุมัติ'});
     }catch(e){ fail(e); }
@@ -1762,16 +1782,14 @@ function giveForm(partnerId){
   if(!kid || !partner) return;
   const left = giveLeft(kid.id);
   if(left <= 0){ toast(`วันนี้แบ่งแต้มครบ ${giveCap()} แต้มแล้ว พรุ่งนี้ค่อยแบ่งใหม่นะ`); return; }
-  const haveD = available(kid.id,'daily'), haveE = available(kid.id,'extra');
-  if(haveD <= 0 && haveE <= 0){ toast('ยังไม่มีแต้มให้แบ่งเลย'); return; }
+  const haveD = available(kid.id);
+  if(haveD <= 0){ toast('ยังไม่มีแต้มให้แบ่งเลย'); return; }
   openForm({title:`🤝 แบ่งแต้มให้${partner.name}`,
     fields:[
-      {key:'extra', label:'แบ่งจากกระเป๋าไหน', type:'switch', value: haveD <= 0,
-       onText:`💎 แต้มพิเศษ (มี ${haveE})`, offText:`🎈 แต้มประจำวัน (มี ${haveD})`},
       {key:'amt', label:'แบ่งกี่แต้ม' + (giveCap() ? ` (วันนี้เหลือได้อีก ${left})` : ''),
        type:'number', value:10}],
     async onSave(v){
-      const pot = v.extra ? 'extra' : 'daily';
+      const pot = 'daily';
       const n = parseInt(v.amt,10);
       if(!n || n<=0) return 'ใส่จำนวนแต้มมากกว่า 0';
       const have = available(kid.id, pot);
@@ -2253,7 +2271,7 @@ function bankTab(k, myPend){
         } · จ่ายไปแล้ว ${o.paid}</div>
       ${ln.cosignId ? `<div class="muted" style="margin-top:4px">🤝 ${esc(ln.cosignName||'')} ค้ำให้อยู่ ${
         over ? '<b style="color:var(--warn)">— เลยกำหนดแล้ว แต้มค้ำกำลังโดนยึด</b>' : '— อย่าให้เลยกำหนดนะ'}</div>` : ''}
-      <div class="muted" style="margin-top:4px">🤖 แต้มประจำวันที่ได้ทุกครั้ง จะถูกหักใช้หนี้อัตโนมัติ ${
+      <div class="muted" style="margin-top:4px">🤖 แต้มที่ได้ทุกครั้ง จะถูกหักใช้หนี้อัตโนมัติ ${
         cfg().loanRepayPct}%</div>
       <button class="btn-primary btn-full" style="margin-top:10px" onclick="payLoanAll()">
         จ่ายคืนตอนนี้ (มี ${available(k.id,'daily')} แต้ม)</button></div>`;
@@ -2282,15 +2300,15 @@ function bankTab(k, myPend){
         · ใช้ไม่ได้จนกว่าหนี้จะปิด · ถ้าเขาคืนไม่ทันกำหนด แต้มนี้จะโดนยึดไปใช้หนี้</div></div>`).join('');
 
   out += `<div class="sec-title">💰 ฝากแต้มกินดอก</div>`;
-  ['daily','extra'].forEach(pot => {
+  ['daily'].forEach(pot => {
     let tl = depTiers(pot);
     if(!tl.length) return;
     const okTiers = ln ? tl.filter(t => now() + t.days*DAYMS <= graceEndOf(ln)) : tl;
-    const has = depositIn(k.id, pot), have = available(k.id, pot);
+    const has = depositIn(k.id), have = available(k.id);
     const can = !has && have > 0 && okTiers.length > 0;
-    out += `<div class="item"><div class="emo">${pot==='extra'?'💎':'🎈'}</div>
+    out += `<div class="item"><div class="emo">⭐</div>
       <div class="txt"><b>${POT_NAME[pot]}</b><span class="muted">${
-        tl.map(t => `${t.days} วัน +${t.pct}%`).join(' · ')} · ฝากได้ไม่เกิน ${depCap(pot)}</span></div>
+        tl.map(t => `${t.days} วัน +${t.pct}%`).join(' · ')}${depCap(pot)?` · ฝากได้ไม่เกิน ${depCap(pot)}`:''}</span></div>
       <button class="${can ? 'btn-primary':''} btn-sm" ${can ? '' : 'disabled'}
         onclick="openDeposit('${pot}')">${
         has ? 'ฝากอยู่แล้ว' : have<=0 ? 'ไม่มีแต้ม' : okTiers.length ? 'ฝาก' : 'ฝากไม่ได้'}</button></div>`;
@@ -2304,8 +2322,8 @@ function bankTab(k, myPend){
     const blocked = deps.length > 0 || outOf;
     out += `<div class="sec-title">💳 ยืมแต้มล่วงหน้า</div>
       <div class="card">
-        <div class="muted">ยืมได้เฉพาะ 🎈 แต้มประจำวัน ไม่เกิน <b>${cfg().loanCap}</b> แต้ม
-          (= เกม/YouTube + ข้าวเย็น + Swensen) · ดอก ${cfg().loanPct}% คืนภายใน ${cfg().loanDays} วัน
+        <div class="muted">ยืมได้ไม่เกิน <b>${cfg().loanCap}</b> แต้ม
+          · ดอก ${cfg().loanPct}% คืนภายใน ${cfg().loanDays} วัน
           · เลยกำหนดดอกเดินวันละ ${cfg().loanLatePct}% (สูงสุด ${cfg().loanMaxPct}%)${
           perWk ? ` · ยืมได้สัปดาห์ละ ${perWk} ครั้ง (สัปดาห์นี้ใช้ไป ${used})` : ''}</div>
         <button class="${blocked?'':'btn-primary'} btn-full" style="margin-top:10px"
@@ -2314,30 +2332,18 @@ function bankTab(k, myPend){
           : deps.length ? 'ถอนเงินฝากให้หมดก่อนถึงจะยืมได้' : 'ขอยืมแต้ม'}</button></div>`;
   }
 
-  /* กติกาบอกครบทุกข้อ แต่ไม่บอกว่าเอาข้อไหนมาต่อกันแล้วได้กำไร — ให้เด็กหาเจอเอง */
   out += `<div class="card" style="background:var(--navy-soft);margin-top:14px">
-    <div class="sec-title" style="margin:0 0 6px">📘 กติกาทั้งหมด (อ่านให้ครบ แล้วลองคิดดู)</div>
-    <div class="muted">
-      1. <b>ฝาก</b> = ล็อกแต้มไว้ ยิ่งล็อกนานยิ่งได้ดอกเยอะ · ถอนก่อนกำหนด <b>ไม่ได้ดอกเลย</b><br>
-      2. ฝากได้กระเป๋าละ <b>1 บัญชี</b> · เพดาน 🎈 ${cfg().depCapDaily} · 💎 ${cfg().depCapExtra}<br>
-      3. <b>ยืม</b> ได้เฉพาะ 🎈 ไม่เกิน ${cfg().loanCap} · แต้มที่หาได้จะโดนหักใช้หนี้อัตโนมัติ ${cfg().loanRepayPct}%<br>
-      4. 🎁 <b>คืนครบภายใน ${cfg().loanGraceDays} วันแรก = ไม่คิดดอกเลย</b> · พ้นจากนั้นคิด ${cfg().loanPct}% เต็มทันที<br>
-      5. มีเงินฝากอยู่ <b>ยืมไม่ได้</b> · มีหนี้อยู่ ฝากได้<b>เฉพาะบัญชีที่ครบกำหนดก่อนหมดช่วงปลอดดอก</b><br>
-      6. 🤝 ให้พี่น้อง<b>ค้ำ</b>ได้ — เขาโดนล็อกแต้ม ${cfg().cosignPct}% ของยอดยืม แลกกับดอกลดครึ่ง
-         · เลยกำหนดเมื่อไหร่ แต้มค้ำโดนยึดจริง<br>
-      7. 🎊 ถ้าเงินฝากของ<b>สองพี่น้องครบกำหนดวันเดียวกัน</b> และล็อกกันอย่างน้อย ${cfg().coDepMinDays} วัน
-         ได้โบนัสทั้งคู่ +${cfg().coDepBonusPct}% (ไม่เกิน ${cfg().coDepBonusMax} แต้ม)
-         · ใครถอนก่อนกำหนด อีกคนอดโบนัสไปด้วย<br>
-      8. ยืมได้สัปดาห์ละ ${cfg().loanPerWeek} ครั้ง</div>
-    <div class="muted" style="margin-top:8px;font-style:italic">
-      💭 กติกาพวกนี้บางข้อเอามาต่อกันได้นะ — ใครคิดออกก่อน ได้แต้มฟรี (นิดหน่อย)</div></div>`;
+    <div class="sec-title" style="margin:0 0 6px">📘 กติกาธนาคาร</div>
+    <div class="muted">ฝาก 7 วัน +1% หรือ 30 วัน +5% · ถอนก่อนกำหนดไม่ได้ดอก<br>
+      ยืมไม่เกิน 300 แต้ม · ดอก 10% · คืนภายใน 14 วัน · แต้มจากงานหักคืน 50% อัตโนมัติ<br>
+      เงินฝากและหนี้ที่เปิดก่อนปรับกติกาใช้อัตราเดิมจนจบสัญญา</div></div>`;
   return out;
 }
 
 /* ---------- 🏦 ธนาคาร: ฝากแต้ม ---------- */
 function openDeposit(pot){
   const kid = kidById(view.kidId); if(!kid || !bankOn()) return;
-  if(depositIn(kid.id, pot)){ toast(`ตอนนี้มีบัญชีฝาก${POT_NAME[pot]}อยู่แล้ว 1 บัญชี`); return; }
+  if(depositIn(kid.id)){ toast('ตอนนี้มีบัญชีฝากแต้มอยู่แล้ว 1 บัญชี'); return; }
   const ln = activeLoan(kid.id);
   let tl = depTiers(pot);
   // มีหนี้อยู่: ฝากได้เฉพาะบัญชีที่ครบกำหนด "ก่อนหมดช่วงปลอดดอก" ของหนี้ก้อนนั้น
@@ -2425,7 +2431,7 @@ function askEarly(recId){
       }catch(e){ fail(e); }
     }), `${kid.name} ใส่ PIN เพื่อยืนยันว่าจะถอนก่อนกำหนด`);
 }
-/* ---------- 🏦 ธนาคาร: ยืมแต้ม (เฉพาะ 🎈 แต้มประจำวัน) ---------- */
+/* ---------- 🏦 ธนาคาร: ยืมแต้ม (เฉพาะ 🎈 แต้ม) ---------- */
 function openLoan(){
   const kid = kidById(view.kidId); if(!kid || !bankOn()) return;
   if(activeLoan(kid.id)){ toast('ยังมีหนี้ค้างอยู่ ต้องปิดหนี้ก่อนถึงจะยืมใหม่ได้'); return; }
@@ -2436,7 +2442,7 @@ function openLoan(){
     toast(`สัปดาห์นี้ยืมครบ ${perWk} ครั้งแล้ว — สัปดาห์หน้าค่อยยืมใหม่นะ`); return; }
   const cap = Number(cfg().loanCap||0), pct = Number(cfg().loanPct||0), dys = Number(cfg().loanDays||7);
   if(cap <= 0){ toast('พ่อแม่ยังไม่ได้เปิดเพดานการยืม'); return; }
-  openForm({title:'💳 ขอยืมแต้มประจำวัน',
+  openForm({title:'💳 ขอยืมแต้ม',
     fields:[{key:'amt', label:`ยืมกี่แต้ม (ไม่เกิน ${cap})`, type:'number', value: Math.min(cap, 70)}],
     async onSave(v){
       const n = parseInt(v.amt,10);
@@ -2486,26 +2492,30 @@ function doLoan(kid, n, pct, dys, cs){
       }catch(e){ fail(e); }
     }), `${kid.name} ใส่ PIN เพื่อยืนยันว่าเข้าใจว่าต้องใช้คืน ${total} แต้ม`);
 }
-/* หักใช้หนี้อัตโนมัติทุกครั้งที่ได้แต้มประจำวันเข้ามา */
+/* หักใช้หนี้อัตโนมัติทุกครั้งที่ได้แต้มเข้ามา */
 async function autoRepay(kidId, credited){
-  const kid = kidById(kidId); if(!kid) return;
-  const arr = bankOf(kid), i = arr.findIndex(x => x.kind === 'loan');
-  if(i < 0) return;
-  const o = loanOwed(arr[i]);
   const rp = Number(cfg().loanRepayPct||0)/100;
   if(rp <= 0) return;
-  const pay = Math.min(Math.max(1, Math.ceil(credited * rp)), o.left, Math.max(0, balance(kidId,'daily')));
-  if(pay <= 0) return;
-  const na = arr.slice(), np = o.paid + pay;
-  const done = np >= o.total;
-  if(done) na.splice(i,1); else na[i] = Object.assign({}, arr[i], {paid:np});
   try{
-    await bankCommit(kidId,
-      logEntry(kidId,'repay', done ? 'ใช้หนี้งวดสุดท้าย — ปิดหนี้แล้ว 🎉'
-               : (o.inGrace ? 'หักใช้หนี้อัตโนมัติ (ยังอยู่ในช่วงปลอดดอก)' : 'หักใช้หนี้อัตโนมัติ'),
-               '💳', -pay, {pot:'daily'}), na);
-    if(done){ await releaseCollateral(arr[i]); toast('ปิดหนี้ครบแล้ว 🎉'); }
-    else if(o.late > 0) await seizeCollateral(kidId);
+    const result = await runTransaction(db, async tx => {
+      const ref=dref('kids',kidId), snap=await tx.get(ref);
+      if(!snap.exists()) return null;
+      const kid=snap.data(), arr=bankOf(kid), i=arr.findIndex(x=>x.kind==='loan');
+      if(i<0) return null;
+      const o=loanOwed(arr[i]);
+      const pay=Math.min(Math.max(1,Math.ceil(credited*rp)),o.left,
+        Math.max(0,Number(kid.points||0)+Number(kid.extra||0)));
+      if(pay<=0) return null;
+      const done=o.paid+pay>=o.total, na=arr.slice();
+      if(done) na.splice(i,1); else na[i]={...arr[i],paid:o.paid+pay};
+      const entry=logEntry(kidId,'repay',done?'ใช้หนี้งวดสุดท้าย — ปิดหนี้แล้ว 🎉':'หักใช้หนี้อัตโนมัติ',
+        '💳',-pay,{pot:'daily'});
+      tx.update(ref,{bank:na,points:increment(-pay)});
+      tx.set(dref('log',entry.id),entry);
+      return {done,loan:arr[i],late:o.late};
+    });
+    if(result?.done){ await releaseCollateral(result.loan); toast('ปิดหนี้ครบแล้ว 🎉'); }
+    else if(result?.late>0) await seizeCollateral(kidId);
   }catch(e){ fail(e); }
 }
 /* ปิดหนี้แล้ว → ปลดล็อกแต้มของคนค้ำ */
@@ -2545,7 +2555,7 @@ function payLoanAll(){
   const o = loanOwed(arr[i]);
   const have = available(kid.id,'daily');
   const pay = Math.min(o.left, have);
-  if(pay <= 0){ toast('แต้มประจำวันยังไม่พอจ่ายคืน'); return; }
+  if(pay <= 0){ toast('แต้มยังไม่พอจ่ายคืน'); return; }
   const done = o.paid + pay >= o.total;
   openConfirm(done ? 'ปิดหนี้ทั้งหมด' : 'จ่ายคืนบางส่วน',
     done ? `จ่าย ${pay} แต้ม แล้วหนี้จะหมดเลย` : `จ่าย ${pay} แต้ม · จะเหลือหนี้อีก ${o.left - pay} แต้ม`,
@@ -2646,7 +2656,7 @@ function parentReview(){
            ราคาเต็ม ${p.total} · หักคนขอ <b>${p.pts}</b> แล้วคืน <b>${p.refund}</b> ให้ ${
            esc(p.partnerName || '')} (จบที่คนละ ${p.pts}) · ขอเมื่อ ${timeAgo(p.ts)}`
       : p.partnerId
-        ? `🤝 หารกับ ${esc(p.partnerName || (kidById(p.partnerId)||{}).name || '')} — ราคาเต็ม ${p.total} แต้ม หักคนละ <b>${p.pts}</b> · ขอเมื่อ ${timeAgo(p.ts)}`
+        ? `🤝 หารกับ ${esc(p.partnerName || (kidById(p.partnerId)||{}).name || '')} — ราคาเต็ม ${p.total} แต้ม คนขอจ่าย <b>${p.pts}</b> อีกคนจ่าย <b>${p.partnerPts ?? p.pts}</b> · ขอเมื่อ ${timeAgo(p.ts)}`
         : `ขอเมื่อ ${timeAgo(p.ts)}`;
     const tagTxt = (kind==='chore' || kind==='loan' || kind==='unlock') ? '+'+p.pts
                  : kind==='transfer' ? '→ '+p.pts : '−'+p.pts;
@@ -2730,9 +2740,9 @@ async function approve(pid, override){
       const rpot = p.pot || 'daily';
       await addLog(logEntry(p.kidId,'reward',p.name,p.emo,-Number(p.pts),{pot:rpot, rid:p.rid||''}));
       if(p.partnerId && kidById(p.partnerId)){        // หารกัน — หักอีกฝ่ายด้วย
-        await addLog(logEntry(p.partnerId,'reward',p.name + ' (หารกัน)',p.emo,-Number(p.pts),
+        await addLog(logEntry(p.partnerId,'reward',p.name + ' (หารกัน)',p.emo,-Number(p.partnerPts ?? p.pts),
                               {pot:rpot, rid:p.rid||'', inv:true}));   // inv = ถูกชวนมาหาร
-        toast(`อนุมัติแล้ว หักคนละ ${p.pts} แต้ม`);
+        toast(`อนุมัติแล้ว หัก ${p.pts} และ ${p.partnerPts ?? p.pts} แต้ม`);
       }else toast('อนุมัติแล้ว หัก ' + p.pts + ' แต้ม');
     }
   }catch(e){ fail(e); }
@@ -2773,7 +2783,7 @@ function parentPoints(){
     return `<div class="card">
       <div class="row-between" style="margin-bottom:12px">
         <div class="row">${avatar(k,46)}
-          <div><b>${esc(k.name)}</b><div class="muted">🎈 ${available(k.id,'daily')} · 💎 ${available(k.id,'extra')}${
+          <div><b>${esc(k.name)}</b><div class="muted">⭐ ${available(k.id)} แต้ม${
             pr.total?` · วันนี้ ${sc.core}/${sc.max} (${sc.pct}%)`:''}</div></div></div>
         <div class="row">
           <button class="btn-good btn-sm" onclick="openAdjust('${k.id}',1)">+ ให้</button>
@@ -2809,7 +2819,7 @@ function applyPenaltyAll(pid){
   const p = S.penalties.find(x => x.id===pid); if(!p) return;
   if(S.kids.length < 2){ toast('มีเด็กคนเดียว ใช้ปุ่มหักรายคนได้เลย'); return; }
   openConfirm(p.emo + ' ' + p.name,
-    `หัก ${S.kids.map(k=>k.name).join(' และ ')} คนละ ${p.pts} แต้มประจำวัน`, async () => {
+    `หัก ${S.kids.map(k=>k.name).join(' และ ')} คนละ ${p.pts} แต้ม`, async () => {
     try{
       for(const k of S.kids) await addLog(logEntry(k.id,'penalty',p.name,p.emo,-Number(p.pts),{pot:'daily'}));
       toast(`หักคนละ ${p.pts} แต้ม (${S.kids.length} คน)`);
@@ -2861,22 +2871,19 @@ function applyPenalty(kidId, pid){
   const p = S.penalties.find(x => x.id===pid); if(!p) return;
   openConfirm('หักแต้ม', `${p.emo} ${p.name} — หัก ${p.pts} แต้ม`, async () => {
     try{ await addLog(logEntry(kidId,'penalty',p.name,p.emo,-Number(p.pts),{pot:'daily'}));
-         toast('หัก '+p.pts+' แต้มประจำวันแล้ว'); }
+         toast('หัก '+p.pts+' แต้มแล้ว'); }
     catch(e){ fail(e); }
   });
 }
 function openAdjust(kidId, dir){
   openForm({title: dir>0?'ให้แต้มเพิ่มเอง':'หักแต้มเอง',
-    fields:[{key:'pot', label:'ใส่เข้ากระเป๋าไหน', type:'switch', value:true,
-             onText:'🎈 แต้มประจำวัน', offText:'💎 แต้มพิเศษ'},
-            {key:'pts', label:'กี่แต้ม', type:'number', value:10},
+    fields:[{key:'pts', label:'กี่แต้ม', type:'number', value:10},
             {key:'why', label:'เหตุผล', type:'text', value: dir>0?'ทำดีพิเศษ':'ปรับพฤติกรรม'}],
     async onSave(v){
       const n = parseInt(v.pts,10);
       if(!n || n<=0) return 'ใส่จำนวนแต้มมากกว่า 0';
-      const pot = v.pot ? 'daily' : 'extra';
       try{ await addLog(logEntry(kidId,'adjust', v.why || (dir>0?'ให้แต้มเพิ่ม':'หักแต้ม'),
-             dir>0?'🌟':'⚠️', dir*n, {pot}));
+             dir>0?'🌟':'⚠️', dir*n, {pot:'daily'}));
            toast('บันทึกแล้ว'); }catch(e){ fail(e); }
     }});
 }
@@ -2903,13 +2910,14 @@ function parentManage(){
   const kidRows = S.kids.map(k => `
     <div class="item">${avatar(k,38)}
       <div class="txt" style="margin-left:2px"><b>${esc(k.name)}</b>
-        <span class="muted">PIN ${k.pin} · 🎈 ${available(k.id,'daily')} · 💎 ${available(k.id,'extra')}</span></div>
+        <span class="muted">PIN ${k.pin} · ⭐ ${available(k.id)} แต้ม</span></div>
       <button class="btn-sm" onclick="editKid('${k.id}')">แก้ไข</button>
       <button class="btn-sm btn-warn" onclick="delItem('kids','${k.id}')">ลบ</button></div>`).join('');
   const choreRowM = c => `
     <div class="item"><div class="emo">${c.emo}</div>
       <div class="txt"><b>${esc(c.name)}</b><span class="muted">${
         (c.from ? c.from+'–' : '') + (c.due ? (c.from?'':'ก่อน ')+c.due+' · ' : '') + daysLabel(c) +
+        (c.dueHoliday ? ` · เสาร์–อาทิตย์ก่อน ${c.dueHoliday}` : '') +
         (c.all ? ' · ให้ทั้งบ้าน' : c.by==='parent' ? ' · พ่อแม่กด' : '') +
         (c.routine && c.by!=='parent' && c.chain===false ? ' · ลำดับอิสระ' : '') +
         (hasCarry(c) ? ` · ↪ ยกไปทำ${DAY_TH[c.carryDay]}ได้ที่ ${c.carryPct||100}%` : '')}</span></div>
@@ -2969,7 +2977,7 @@ function parentManage(){
         <span>🤝 แบ่งแต้มให้พี่น้องได้วันละ</span>
         <button class="btn-sm" onclick="editGiveCap()">${
           c.maxGiveDay ? c.maxGiveDay+' แต้ม/คน' : 'ไม่จำกัด'}</button></div>
-      <div class="muted" style="margin-top:8px">เด็กแบ่งแต้มให้กันได้ทั้ง 🎈 และ 💎 (ข้ามกระเป๋าไม่ได้)
+      <div class="muted" style="margin-top:8px">เด็กแบ่งแต้มจากกระเป๋าเดียวกันได้
         · คนให้ต้องใส่ PIN ของตัวเอง แล้วเข้าคิวรอพ่อแม่อนุมัติก่อนแต้มถึงย้าย</div>
       <div class="sec-title" style="margin:16px 0 8px">🎮 โหมดสนุก</div>
       <div class="switch">
@@ -3000,33 +3008,31 @@ function parentManage(){
         <button class="${c.bankOn!==false?'on':''}" onclick="setOpt('bankOn',true)">เปิดใช้</button>
         <button class="${c.bankOn!==false?'':'on'}" onclick="setOpt('bankOn',false)">ปิด</button></div>
       ${c.bankOn!==false ? bankPanel(c) : ''}
-      <div class="muted" style="margin-top:10px">
-        <b>🎈 แต้มประจำวัน</b> มาจากกิจวัตรหลัก (เต็ม 100/วัน) → ซื้อรางวัลเล็ก<br>
-        <b>💎 แต้มพิเศษ</b> มาจากงานเสริม + โบนัสทำครบตรงเวลา (+${c.perfectBonus}) → ซื้อรางวัลใหญ่เท่านั้น</div></div>
+      <div class="muted" style="margin-top:10px">⭐ แต้มจากทุกงานและยอดเก่ารวมเป็นกระเป๋าเดียว ใช้แลกรางวัลทุกประเภท</div></div>
 
     <div class="sec-title">👧 เด็ก ๆ</div>
     ${kidRows || '<div class="empty">ยังไม่มี</div>'}
     <button class="btn-primary btn-full" onclick="editKid()">+ เพิ่มเด็ก</button>
 
-    <div class="sec-title">⏰ กิจวัตรหลัก → 🎈 แต้มประจำวัน (วันนี้รวม ${
+    <div class="sec-title">⏰ กิจวัตรหลัก → ⭐ แต้ม (วันนี้รวม ${
       routineToday().reduce((s,c)=>s+ptsToday(c),0)} แต้ม · วันที่งานเยอะสุดของสัปดาห์ = ${weekPeakRoutine()})</div>
     ${S.chores.filter(x=>x.routine).sort((a,b)=>(a.due||'99')<(b.due||'99')?-1:1).map(choreRowM).join('') || '<div class="empty">ยังไม่มี</div>'}
 
-    <div class="sec-title">⭐ งานเสริม → 💎 แต้มพิเศษ (ไม่นับใน % · ใช้ซื้อรางวัลใหญ่เท่านั้น)</div>
+    <div class="sec-title">⭐ งานเสริม → กระเป๋าแต้มเดียวกัน (ไม่นับใน % กิจวัตร)</div>
     ${S.chores.filter(x=>!x.routine).map(choreRowM).join('') || '<div class="empty">ยังไม่มี</div>'}
     <button class="btn-primary btn-full" onclick="editItem('chores')">+ เพิ่มงาน</button>
 
-    <div class="sec-title">⚠️ รายการหักแต้ม (หักจาก 🎈 แต้มประจำวัน)</div>
+    <div class="sec-title">⚠️ รายการหักแต้ม</div>
     ${S.penalties.map(p => simpleRow('penalties', p, 'tag-minus', '−'+p.pts+(p.all?' 👥':''))).join('')}
     <button class="btn-primary btn-full" onclick="editItem('penalties')">+ เพิ่มรายการหักแต้ม</button>
 
-    <div class="sec-title">🎈 รางวัลเล็ก — ใช้แต้มประจำวัน (🤝 = หารกันได้)</div>
+    <div class="sec-title">🎁 รางวัลทั่วไป — ใช้แต้ม (🤝 = หารกันได้)</div>
     ${S.rewards.filter(r=>!r.big).map(r => simpleRow('rewards', r, 'tag-cost',
         r.cost + (r.share ? ' 🤝 คนละ '+Math.ceil(r.cost/2) : '')
         + (Number(r.limitWeek) ? ' · สป.ละ '+r.limitWeek : Number(r.limitDay) ? ' · วันละ '+r.limitDay : '')
       )).join('') || '<div class="empty">ยังไม่มี</div>'}
 
-    <div class="sec-title">💎 รางวัลใหญ่ — ใช้แต้มพิเศษ (🤝 = หารกันได้)</div>
+    <div class="sec-title">⭐ รางวัลใหญ่ — ใช้แต้มเดียวกัน (🤝 = หารกันได้)</div>
     ${S.rewards.filter(r=>r.big).map(r => simpleRow('rewards', r, 'tag-cost',
         r.cost + (r.share ? ' 🤝 คนละ '+Math.ceil(r.cost/2) : ''))).join('') || '<div class="empty">ยังไม่มี</div>'}
     <button class="btn-primary btn-full" onclick="editItem('rewards')">+ เพิ่มของรางวัล</button>
@@ -3071,72 +3077,22 @@ function editIdleSec(){
 }
 /* แผงธนาคารในหน้าตั้งค่า + รายงานเงินเฟ้อ 30 วัน */
 function bankPanel(c){
-  const r = bankReport(30);
-  const hot = r.pct > 5;
-  const openAcc = S.kids.map(k => {
-    const ln = activeLoan(k.id), ds = myDeposits(k.id);
-    if(!ln && !ds.length) return '';
-    return `<div class="log-line"><span style="font-size:19px">${k.emo||'🙂'}</span>
-      <span style="flex:1">${esc(k.name)}<span class="muted" style="display:block">${
-        [ln ? `💳 ค้าง ${loanOwed(ln).left} (${untilTxt(ln.dueTs)})` : '',
-         ...ds.map(d => `🏦 ฝาก ${d.amount} ${POT_NAME[d.pot]} · ${
-           matured(d) ? 'ครบแล้ว' : untilTxt(d.dueTs)} · ดอก +${depInterest(d)}`)]
-        .filter(Boolean).join('<br>')}</span></span></div>`;
+  const openAcc=S.kids.map(k=>{
+    const ln=activeLoan(k.id),ds=myDeposits(k.id);
+    if(!ln&&!ds.length)return '';
+    return `<div class="log-line"><b>${esc(k.name)}</b><span style="flex:1"></span><span class="muted">${[
+      ln?`หนี้ค้าง ${loanOwed(ln).left} แต้ม`: '',
+      ...ds.map(d=>`ฝาก ${d.amount} แต้ม · ${d.pct}% · ${matured(d)?'ครบกำหนดแล้ว':untilTxt(d.dueTs)}`)
+    ].filter(Boolean).join('<br>')}</span></div>`;
   }).join('');
-  return `
-    <div class="row-between" style="margin-top:12px"><span>เพดานยืม (🎈 เท่านั้น)</span>
-      <button class="btn-sm" onclick="editBankNum('loanCap','เพดานยืมสูงสุด (แต้ม)',0,2000)">${c.loanCap} แต้ม</button></div>
-    <div class="row-between" style="margin-top:10px"><span>ดอกยืม / กำหนดคืน</span>
-      <button class="btn-sm" onclick="editBankNum('loanPct','ดอกเบี้ยเงินกู้ (%)',0,100)">${c.loanPct}%</button>
-      <button class="btn-sm" onclick="editBankNum('loanDays','คืนภายในกี่วัน',1,60)">${c.loanDays} วัน</button></div>
-    <div class="row-between" style="margin-top:10px"><span>เลยกำหนด ดอกเดินวันละ / เพดานรวม</span>
-      <button class="btn-sm" onclick="editBankNum('loanLatePct','เลยกำหนด ดอกเพิ่มวันละ (%)',0,20)">${c.loanLatePct}%</button>
-      <button class="btn-sm" onclick="editBankNum('loanMaxPct','ดอกรวมสูงสุด (%)',0,200)">${c.loanMaxPct}%</button></div>
-    <div class="row-between" style="margin-top:10px"><span>หักใช้หนี้อัตโนมัติ</span>
-      <button class="btn-sm" onclick="editBankNum('loanRepayPct','หักกี่ % ของแต้มที่ได้',0,100)">${c.loanRepayPct}%</button></div>
-    <div class="row-between" style="margin-top:14px"><span>ดอกฝาก 🎈 / เพดานต่อบัญชี</span>
-      <button class="btn-sm" onclick="editBankTier('depDaily')">${esc(c.depDaily||'—')}</button>
-      <button class="btn-sm" onclick="editBankNum('depCapDaily','ฝาก 🎈 ได้ไม่เกิน (แต้ม)',0,2000)">${c.depCapDaily}</button></div>
-    <div class="row-between" style="margin-top:10px"><span>ดอกฝาก 💎 / เพดานต่อบัญชี</span>
-      <button class="btn-sm" onclick="editBankTier('depExtra')">${esc(c.depExtra||'—')}</button>
-      <button class="btn-sm" onclick="editBankNum('depCapExtra','ฝาก 💎 ได้ไม่เกิน (แต้ม)',0,5000)">${c.depCapExtra}</button></div>
-    <div class="muted" style="margin-top:8px">รูปแบบตารางดอก: <b>วัน:%</b> คั่นด้วยจุลภาค เช่น <b>3:2,7:5,14:10</b></div>
-
-    <div class="sec-title" style="margin:16px 0 8px">🧩 ช่องทำกำไรที่ตั้งใจเปิดไว้ (ให้เด็กหาเจอเอง)</div>
-    <div class="row-between"><span>ปลอดดอก N วันแรก / ยืมได้สัปดาห์ละ</span>
-      <button class="btn-sm" onclick="editBankNum('loanGraceDays','คืนครบภายในกี่วันแรก ไม่คิดดอก (0 = ปิดช่องนี้)',0,14)">${c.loanGraceDays} วัน</button>
-      <button class="btn-sm" onclick="editBankNum('loanPerWeek','ยืมได้กี่ครั้งต่อสัปดาห์ (0 = ไม่จำกัด)',0,7)">${c.loanPerWeek} ครั้ง</button></div>
-    <div class="row-between" style="margin-top:10px"><span>โบนัสฝากครบกำหนดวันเดียวกัน</span>
-      <button class="btn-sm" onclick="editBankNum('coDepBonusPct','โบนัส % (0 = ปิด)',0,20)">+${c.coDepBonusPct}%</button>
-      <button class="btn-sm" onclick="editBankNum('coDepBonusMax','เพดานโบนัสต่อบัญชี (แต้ม)',0,50)">≤${c.coDepBonusMax}</button>
-      <button class="btn-sm" onclick="editBankNum('coDepMinDays','ต้องล็อกอย่างน้อยกี่วันถึงได้โบนัส',1,90)">≥${c.coDepMinDays}ว</button></div>
-    <div class="row-between" style="margin-top:10px"><span>ค้ำประกัน: ล็อก % ของยอด / ลดดอก %</span>
-      <button class="btn-sm" onclick="setOpt('cosignOn', ${c.cosignOn===false})">${c.cosignOn===false?'ปิดอยู่':'เปิดอยู่'}</button>
-      <button class="btn-sm" onclick="editBankNum('cosignPct','คนค้ำโดนล็อกกี่ % ของยอดยืม',0,100)">${c.cosignPct}%</button>
-      <button class="btn-sm" onclick="editBankNum('cosignDiscount','ค้ำแล้วดอกลดกี่ %',0,100)">−${c.cosignDiscount}%</button></div>
-    <div class="muted" style="margin-top:8px">
-      <b>ช่อง 1</b> ยืมแล้วเอาไปฝากขั้นสั้น ปิดหนี้ก่อนหมดช่วงปลอดดอก → กำไร ~${
-        Math.floor(Number(c.depCapDaily||0) * (depTiers('daily')[0]||{pct:0}).pct / 100)} แต้ม/ครั้ง
-      · ขั้นยาวกว่านั้นขาดทุนเสมอเพราะติดดอกยืม ${c.loanPct}%<br>
-      <b>ช่อง 2</b> นัดกันให้เงินฝากครบกำหนดวันเดียวกัน · <b>ช่อง 3</b> ค้ำให้กันแล้วแบ่งดอกที่ประหยัดได้<br>
-      ตั้ง "ปลอดดอก" เป็น 0 = ปิดช่อง 1 · ตั้งโบนัสเป็น 0 = ปิดช่อง 2</div>
-
-    <div class="card" style="margin:14px 0 0;background:${hot?'var(--warn-soft)':'var(--good-soft)'}">
-      <div class="sec-title" style="margin:0 0 6px">📉 เช็กแต้มเฟ้อ — 30 วันล่าสุด (ทั้งบ้าน)</div>
-      <div class="muted">
-        ดอกฝากที่จ่ายออกไป (แต้มเกิดใหม่) <b style="color:var(--warn)">+${r.created}</b><br>
-        ดอกยืมที่เก็บเข้ามา (แต้มถูกเผา) <b style="color:var(--good)">−${r.burned}</b><br>
-        สุทธิ <b>${r.net>=0?'+':''}${r.net}</b> จากแต้มที่ลูกหาได้ทั้งหมด ${r.earned}
-        → <b style="color:${hot?'var(--warn)':'var(--good)'}">${r.pct}%</b></div>
-      <div class="muted" style="margin-top:8px">${hot
-        ? '⚠️ เกิน 5% แล้ว — แต้มกำลังเฟ้อ รางวัลจะ "ถูกลง" เรื่อย ๆ แก้ได้ 3 ทาง: ลด % ดอกฝาก · ลดเพดานฝาก · หรือขึ้นราคารางวัลตามส่วน'
-        : '✅ ต่ำกว่า 5% ถือว่าคุมอยู่ ไม่ต้องขึ้นราคารางวัล'}</div>
-    </div>
-    ${openAcc ? `<div class="card" style="margin:12px 0 0">
-      <div class="sec-title" style="margin:0 0 6px">📂 บัญชีที่ยังเปิดอยู่</div>${openAcc}</div>` : ''}
-    <div class="muted" style="margin-top:10px">
-      <b>กฎกันช่องโหว่ที่ล็อกไว้ในระบบ:</b> มีหนี้ → ฝากไม่ได้ · มีเงินฝาก → ยืมไม่ได้
-      · ถ้าดอกยืมต่ำกว่าดอกฝากเมื่อไหร่ เด็กจะฝากทั้งหมดแล้วยืมมาใช้ = ได้แต้มฟรี ควรตั้งดอกยืมสูงกว่าเสมอ</div>`;
+  return `<div class="card">
+    <div class="sec-title">🏦 กติกาธนาคาร</div>
+    <div class="muted">ฝากแต้ม 7 วัน ดอก 1% หรือ 30 วัน ดอก 5% · ถอนก่อนกำหนดไม่ได้ดอก
+      · ยืมได้ไม่เกิน 300 แต้ม ดอก 10% คืนภายใน 14 วัน
+      · แต้มจากงานใหม่หักคืนอัตโนมัติ 50%<br>
+      บัญชีเก่าที่เปิดไว้ยังใช้อัตราและวันครบตามสัญญาเดิม</div>
+    ${openAcc||'<div class="muted" style="margin-top:10px">ยังไม่มีบัญชีเปิดอยู่</div>'}
+  </div>`;
 }
 function editBankNum(key, label, lo, hi){
   openForm({title:label,
@@ -3148,7 +3104,7 @@ function editBankNum(key, label, lo, hi){
     }});
 }
 function editBankTier(key){
-  const pot = key === 'depExtra' ? '💎 แต้มพิเศษ' : '🎈 แต้มประจำวัน';
+  const pot = key === 'depExtra' ? '💎 แต้ม' : '🎈 แต้ม';
   openForm({title:`ตารางดอกฝาก ${pot}`,
     fields:[{key:'t', label:'รูปแบบ วัน:% คั่นด้วย , เช่น 3:2,7:5,14:10', type:'text', value:cfg()[key]||''}],
     async onSave(v){
@@ -3315,7 +3271,9 @@ function renderModal(){
           ${avatar(o, 40)}
           <div class="txt" style="margin-left:2px"><b>${esc(o.name)}</b>
             <span class="muted">มี ${available(o.id, modal.pot)} · จ่าย ${half}</span></div>
-          <button class="btn-gold btn-sm" onclick="shareWith('${r.id}','${o.id}')">ชวนคนนี้</button>
+          <button class="btn-gold btn-sm" ${available(modal.kid.id)>=half && available(o.id)>=Number(r.cost)-half?'':'disabled'}
+            onclick="shareWith('${r.id}','${o.id}')">50/50</button>
+          <button class="btn-sm" onclick="shareCustom('${r.id}','${o.id}')">ปรับส่วนแบ่ง</button>
         </div>`).join('')}
         ${modal.jt && modal.jt.other ? `
         <div class="sec-title" style="margin:16px 0 8px">หรือแทรกรอบที่${esc(modal.jt.other.name)}แลกไปแล้ววันนี้</div>
@@ -3391,7 +3349,7 @@ function renderModal(){
         ${modal.others.map(o => `<div class="item" style="background:var(--bg)">
           ${avatar(o, 40)}
           <div class="txt" style="margin-left:2px"><b>${esc(o.name)}</b>
-            <span class="muted">ตอนนี้มี 🎈 ${available(o.id,'daily')} · 💎 ${available(o.id,'extra')}</span></div>
+            <span class="muted">ตอนนี้มี ⭐ ${available(o.id)} แต้ม</span></div>
           <button class="btn-gold btn-sm" onclick="giveForm('${o.id}')">เลือก</button>
         </div>`).join('')}
         <div class="sheet-actions"><button onclick="closeModal()">ยกเลิก</button></div>
@@ -3606,7 +3564,7 @@ function editItem(list, id){
         {key:'due', label:'ต้องเสร็จก่อนเวลา (เว้นว่าง = ไม่กำหนด)', type:'time', value:x?(x.due||''):''},
         {key:'days', label:'ทำวันไหนบ้าง', type:'days', value:x?(x.days||ALLDAYS).slice():WEEKDAYS.slice()},
         {key:'routine', label:'แต้มเข้ากระเป๋าไหน', type:'switch', value:x?!!x.routine:true,
-         onText:'🎈 กิจวัตรหลัก (นับ %)', offText:'💎 งานเสริม (แต้มพิเศษ)'},
+         onText:'🎈 กิจวัตรหลัก (นับ %)', offText:'💎 งานเสริม (แต้ม)'},
         {key:'by', label:'ใครเป็นคนกด', type:'switch', value:x?(x.by!=='parent'):true,
          onText:'ลูกกดเอง', offText:'พ่อแม่กดให้'},
         {key:'all', label:'ให้แต้มทุกคนพร้อมกันไหม (พ่อแม่กดครั้งเดียว)', type:'switch', value:x?!!x.all:false,
@@ -3679,7 +3637,7 @@ function editItem(list, id){
   openForm({title:(x?'แก้ไข':'เพิ่ม')+'รายการหักแต้ม',
     fields:[{key:'name', label:'พฤติกรรม', type:'text', value:x?x.name:''},
             {key:'emo', label:'ไอคอน', type:'emoji', value:x?x.emo:'⚠️'},
-            {key:'pts', label:'หักกี่แต้ม (จากแต้มประจำวัน)', type:'number', value:x?x.pts:10},
+            {key:'pts', label:'หักกี่แต้ม (จากแต้ม)', type:'number', value:x?x.pts:10},
             {key:'all', label:'หักทั้งบ้านพร้อมกันได้ไหม', type:'switch', value:x?!!x.all:false,
              onText:'ผิดทั้งคู่ (หักทุกคน)', offText:'หักทีละคน'}],
     async onSave(v){
@@ -3703,7 +3661,8 @@ function delItem(list, id){
    เชื่อมต่อ Firestore
    ============================================================ */
 function watch(){
-  const empty = {settings:Object.assign({}, DEF_SETTINGS), kids:[], chores:[], penalties:[], rewards:[], pending:[], log:[], petart:{}, adventureTickets:[]};
+  const empty = {settings:Object.assign({}, DEF_SETTINGS), kids:[], chores:[], penalties:[], rewards:[], pending:[], log:[],
+    rewardHistory:[], rewardHistoryReady:false, petart:{}, adventureTickets:[]};
   S = S || empty;
   const mark = n => { ready[n] = true; if(Object.keys(ready).length >= 7) render(); };
 
@@ -3735,6 +3694,10 @@ function watch(){
   }, e => console.error(e)));
   unsubs.push(onSnapshot(query(col('log'), orderBy('ts','desc'), limit(600)), snap => {
     S.log = snap.docs.map(d => d.data()).sort(newestFirst); mark('log'); render();
+  }, e => console.error(e)));
+  // Reward quota and six-month toy cooldown need the full reward history, not the 600-row activity feed.
+  unsubs.push(onSnapshot(query(col('log'), where('kind','==','reward')), snap => {
+    S.rewardHistory = snap.docs.map(d => d.data()); S.rewardHistoryReady = true; render();
   }, e => console.error(e)));
 }
 async function seedOrMigrate(){
@@ -3960,6 +3923,33 @@ async function seedOrMigrate(){
       arbV1:true, loanGraceDays:3, loanPerWeek:1,
       coDepBonusPct:2, coDepBonusMax:5, coDepMinDays:14,
       cosignOn:true, cosignPct:50, cosignDiscount:50});
+  }
+  if(!cur.walletRulesV1){
+    // Replace only known built-in catalog items. Custom chores, rewards, history and bank contracts stay intact.
+    const oldChores = new Set(['ถึงโรงเรียนตรงเวลา','ทำการบ้านเสร็จ','เก็บกระเป๋าพร้อมพรุ่งนี้',
+      'เตรียมชุดวันพรุ่งนี้','ตื่นนอน ลุกจากเตียง','กินข้าวเช้าเสร็จ',
+      'อาบน้ำ แปรงฟัน แต่งตัวเสร็จ','วันนี้ไม่ทำให้แม่ต้องเสียงดัง','พูดอังกฤษกับพ่อแม่ 10 นาที',
+      'เรียนหมากรุก 30 นาที','อ่านหนังสือ 20 นาที','เก็บที่นอนหลังตื่น',
+      'เล่นแล้วเก็บของเข้าที่เอง (ไม่ต้องบอก)','ช่วยงานบ้าน',
+      'พร้อมออกจากบ้านไปโรงเรียน','ซ้อม Piano20 นาที']);
+    const oldRewards = new Set(['Educational YouTube 30 นาที','เล่นเกม 30 นาที','YouTube 30 นาที',
+      'นอนดึกได้ 1 ชม.','Swensen','Dinner out ไปกินข้าวนอกบ้าน','เลือกเมนูข้าวเย็น',
+      'ของเล่นงบ 200 บาท','ของเล่นงบ 500 บาท','Movie day','ของเล่นงบ 1,000 บาท','ไปเที่ยว Space']);
+    const oldPenalties = new Set(['ไม่เก็บของ ทิ้งเกลื่อน','ต้องเรียกเกิน 3 ครั้ง','ทะเลาะกับพี่น้อง',
+      'เถียง/พูดไม่เพราะ','เล่นเกินเวลาที่ตกลง']);
+    const [cs,rs,ps] = await Promise.all([getDocs(col('chores')),getDocs(col('rewards')),getDocs(col('penalties'))]);
+    const batch = writeBatch(db);
+    cs.docs.forEach(d => { if(!d.id.startsWith('v1-') && oldChores.has(d.data().name)) batch.delete(d.ref); });
+    rs.docs.forEach(d => { if(!d.id.startsWith('v1-') && oldRewards.has(d.data().name)) batch.delete(d.ref); });
+    ps.docs.forEach(d => { if(!d.id.startsWith('v1-') && oldPenalties.has(d.data().name)) batch.delete(d.ref); });
+    DEF_CHORES.forEach(c => batch.set(dref('chores',c.id),c));
+    DEF_REWARDS.forEach(r => batch.set(dref('rewards',r.id),r));
+    DEF_PENALTIES.forEach(p => batch.set(dref('penalties',p.id),p));
+    batch.update(settingsRef(), {walletRulesV1:true, walletRulesAt:now(), perfectBonus:20, stepOrder:false,
+      loanCap:300, loanPct:10, loanDays:14, loanGraceDays:0, loanLatePct:0,
+      loanMaxPct:10, loanRepayPct:50, cosignOn:false,
+      depDaily:'7:1,30:5', depExtra:'7:1,30:5', depCapDaily:0, depCapExtra:0});
+    await batch.commit();
   }
 }
 
