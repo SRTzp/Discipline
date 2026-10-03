@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f6f2ec">
-<meta name="discipline-release" content="legacy-wallet-v1-2026-10-02">
+<meta name="discipline-release" content="legacy-wallet-v1.1-2026-10-03">
 <title>Discipline</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
 <style>
@@ -363,7 +363,7 @@ const {getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
        setPersistence, browserLocalPersistence} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
 const {initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
        collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
-       increment, query, orderBy, limit, getDocs, where, runTransaction} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+       increment, query, orderBy, limit, getDocs, getDocsFromServer, where, runTransaction} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = initializeFirestore(app, {
@@ -609,9 +609,13 @@ const balance = kidId => {
    และคำขอแบ่งแต้มให้พี่น้อง (จองเฉพาะฝั่งคนให้) จะได้ไม่ใช้แต้มก้อนเดียวกันซ้ำ */
 const reserved = kidId => S.pending.filter(p => ( (p.type==='reward'   && (p.kidId===kidId || p.partnerId===kidId))
                             || (p.type==='transfer' &&  p.kidId===kidId)
-                            || (p.type==='join'     &&  p.kidId===kidId) ))
-                          .reduce((s,p)=>s+Number(p.type==='reward' && p.partnerId===kidId
-                            ? (p.partnerPts ?? p.pts) : p.pts),0);
+                            || (p.type==='join'     &&  p.kidId===kidId)
+                            || (p.type==='loan'     &&  p.partnerId===kidId) ))
+                          .reduce((s,p)=>s+Number(p.type==='loan' ? (p.hold||0)
+                            : p.type==='reward' && p.partnerId===kidId
+                              ? (Number(p.partnerPts)>0 ? p.partnerPts
+                                : Number(p.total)>0 ? Number(p.total)-Number(p.pts) : p.pts)
+                              : p.pts),0);
 /* แต้มที่เอาไปค้ำประกันให้พี่น้อง ยังอยู่ในกระเป๋าแต่แตะไม่ได้จนกว่าหนี้จะปิด */
 const held = kidId => kidBank(kidId)
   .filter(b => b.kind==='collateral')
@@ -647,13 +651,16 @@ function usedTimes(kidId, rid){
   const d = dayStartTs(), w = weekStartTs(), rows = [];
   const target = S.rewards.find(r => r.id === rid) || {id:rid};
   const group = rewardGroup(target);
+  const familyQuota = group==='dinner' || group==='icecream';
   (S.rewardHistoryReady ? S.rewardHistory : S.log).forEach(l => {
-    if(l.kind === 'reward' && l.kidId === kidId && rewardGroup(rewardForEvent(l)) === group)
+    if(l.kind === 'reward' && rewardGroup(rewardForEvent(l)) === group
+      && (familyQuota ? !l.inv && !String(l.name||'').includes('(หารกัน)') : l.kidId === kidId))
       rows.push({ts:l.ts, inv: !!l.inv});
   });
   S.pending.forEach(p => {
     if((p.type !== 'reward' && p.type !== 'join') || rewardGroup(rewardForEvent(p)) !== group) return;
-    if(p.kidId === kidId) rows.push({ts:p.ts, inv:false});
+    if(familyQuota){ if(p.type==='reward') rows.push({ts:p.ts,inv:false}); }
+    else if(p.kidId === kidId) rows.push({ts:p.ts, inv:false});
     else if(p.partnerId === kidId) rows.push({ts:p.ts, inv:true});
   });
   const today = rows.filter(x => x.ts >= d);
@@ -667,7 +674,8 @@ function usedTimes(kidId, rid){
 function limitLeft(kidId, r, asInvited){
   const u = usedTimes(kidId, r.id);
   const ld = Number(r.limitDay || 0);
-  const dLeft = ld ? ld - (rewardGroup(r)==='screen' ? u.day : (asInvited ? u.inv : u.own)) : Infinity;
+  const g=rewardGroup(r);
+  const dLeft = ld ? ld - (g==='screen' || g==='dinner' || g==='icecream' ? u.day : (asInvited ? u.inv : u.own)) : Infinity;
   const wLeft = Number(r.limitWeek||0) ? Number(r.limitWeek) - u.week : Infinity;
   const cooldown = Number(r.cooldownMonths||0) ? (() => {
     const end = new Date(u.last), day=end.getDate();
@@ -1507,14 +1515,16 @@ function viewKid(){
       const half = Math.ceil(Number(r.cost)/2);
       const price = Number(r.cost);
       const lim = limitLeft(k.id, r);
+      const canJoin = !!joinTarget(k.id,r);
       const canShare = r.share && S.kids.some(x => x.id!==k.id &&
         have>0 && available(x.id)>0 && have+available(x.id)>=price && limitLeft(x.id,r,true).ok);
-      const can = (have >= price || canShare) && lim.ok;
+      const can = ((have >= price || canShare) && lim.ok) || canJoin;
       // พี่น้องที่ยัง "ถูกชวน" ได้ (ต่อให้เขาดูเองไปแล้ววันนี้)
       const mates = r.share ? S.kids.filter(x => x.id !== k.id
         && available(x.id, pot)>0 && have+available(x.id,pot)>=price && limitLeft(x.id, r, true).ok) : [];
       let sub;
-      if(!lim.ok) sub = lim.cooldown ? 'รายการนี้ต้องเว้น 6 เดือนก่อนแลกซ้ำ'
+      if(!lim.ok) sub = canJoin ? 'ร่วมรอบที่พี่น้องแลกไปแล้วได้'
+        : lim.cooldown ? 'รายการนี้ต้องเว้น 6 เดือนก่อนแลกซ้ำ'
         : lim.dLeft<=0
         ? (mates.length ? `เริ่มเองครบแล้ววันนี้ — รอ${esc(mates[0].name)}ชวนหารได้อีก 1 รอบ` : `วันนี้แลกครบโควตาแล้ว`)
         : `สัปดาห์นี้แลกครบแล้ว (${r.limitWeek} ครั้ง)`;
@@ -1646,11 +1656,15 @@ const potOf = r => r.big ? 'extra' : 'daily';
    เงื่อนไข: รางวัลนี้หารได้ · เรายังไม่ได้ใช้โควตาของรายการนี้วันนี้ · เขายังจ่ายเต็มราคาอยู่ (ยังไม่มีคนหาร) */
 function joinTarget(kidId, r){
   if(!r || !r.share) return null;
-  if(usedTimes(kidId, r.id).day > 0) return null;
+  const group=rewardGroup(r), d=dayStartTs();
+  if((S.rewardHistoryReady ? S.rewardHistory : S.log).some(l => l.kind==='reward' && l.kidId===kidId
+    && rewardGroup(rewardForEvent(l))===group && l.ts>=d)) return null;
+  if(S.pending.some(p => (p.type==='reward'||p.type==='join') && p.ts>=d
+    && rewardGroup(rewardForEvent(p))===group && (p.kidId===kidId||p.partnerId===kidId))) return null;
   if(S.pending.some(x => x.type==='join' && x.rid===r.id && x.kidId===kidId)) return null;
   const pot = potOf(r), t = todayStr();
   const pend = S.pending.find(x => x.type==='reward' && x.rid===r.id
-                            && x.kidId!==kidId && !x.partnerId);
+                            && x.kidId!==kidId && !x.partnerId && dstr(x.ts)===t);
   if(pend) return {kind:'pending', p:pend, other:kidById(pend.kidId), pot};
   const lg = S.log.find(l => l.kind==='reward' && l.rid===r.id && l.kidId!==kidId
                         && dstr(l.ts)===t && Math.abs(Number(l.delta)) === Number(r.cost));
@@ -1671,12 +1685,21 @@ function joinShare(id){
   askKidPin(kid, () => openConfirm(`ขอร่วม "${r.name}"`, msg + ' · รอคุณพ่อคุณแม่อนุมัติก่อนนะ', async () => {
     try{
       if(jt.kind === 'pending'){       // ยังไม่อนุมัติ → แก้คำขอเดิมให้กลายเป็นหารกัน ไม่ต้องคืนอะไร
-        await setDoc(dref('pending', jt.p.id),
-          Object.assign({}, jt.p, {pts:half, partnerId:kid.id, partnerName:kid.name}));
+        await runTransaction(db, async tx => {
+          const ref=dref('pending',jt.p.id), original=await tx.get(ref);
+          if(!original.exists()) throw new Error('คำขอเดิมถูกอนุมัติไปแล้ว กรุณาเปิดใหม่');
+          const cur=original.data();
+          if(cur.type!=='reward' || cur.partnerId || Number(cur.total)!==Number(r.cost)
+             || Number(cur.pts)!==Number(cur.total))
+            throw new Error('คำขอเดิมเปลี่ยนแล้ว กรุณาเปิดใหม่');
+          tx.update(ref,{pts:half,partnerPts:Number(r.cost)-half,
+            partnerId:kid.id,partnerName:kid.name,total:Number(r.cost)});
+        });
       }else{                           // อนุมัติไปแล้ว → เข้าคิวใหม่ หักคนขอ + คืนส่วนต่างให้คนแรก
         const q = {id:uid(), ts:now(), kidId:kid.id, type:'join', name:r.name, emo:r.emo,
                    pts:half, total:Number(r.cost), pot:jt.pot, rid:r.id,
-                   partnerId:jt.other.id, partnerName:jt.other.name, refund};
+                   partnerId:jt.other.id, partnerName:jt.other.name, refund,
+                   sourceLogId:jt.l.id};
         await setDoc(dref('pending', q.id), q);
       }
       showFlash({emo:'🤝', title:'ส่งคำขอร่วมแล้ว', big:`คนละ ${half} แต้ม`, color:'var(--gold)',
@@ -1697,13 +1720,13 @@ function redeem(id){
   const kid = kidById(view.kidId); if(!kid) return;
   const pot = potOf(r);
   const lim = limitLeft(kid.id, r);
-  if(!lim.ok){ toast(limitMsg(r, lim)); return; }
+  const jt = joinTarget(kid.id, r);
+  if(!lim.ok && !jt){ toast(limitMsg(r, lim)); return; }
   const half = Math.ceil(Number(r.cost)/2);
   // คนที่มาหารได้ = ยังมีโควตาถัง "ถูกชวน" เหลือ (แม้เขาจะดูเองไปแล้ววันนี้ก็ยังมาหารรอบใหม่ได้)
-  const others = S.kids.filter(x => x.id !== kid.id
+  const others = !lim.ok ? [] : S.kids.filter(x => x.id !== kid.id
     && available(x.id,pot)>0 && available(kid.id,pot)+available(x.id,pot)>=Number(r.cost)
     && limitLeft(x.id, r, true).ok);
-  const jt = joinTarget(kid.id, r);          // ตัวเลือกที่ 2: แทรกรอบที่เขาแลกไปแล้ว
   if(r.share && (others.length || jt)){ modal = {kind:'share', r, kid, half, others, pot, jt}; renderModal(); return; }
   if(available(kid.id, pot) < Number(r.cost)){
     toast(r.share ? 'ยังไม่มีใครแต้มพอมาหารด้วย และแต้มตัวเองก็ยังไม่พอ'
@@ -2677,80 +2700,257 @@ function parentReview(){
       </div></div>`;
   }).join('');
 }
-async function approve(pid, override){
-  const p = S.pending.find(x => x.id===pid); if(!p) return;
-  try{
-    await deleteDoc(dref('pending', pid));
-    if(p.type === 'chore'){
-      const pts = override !== undefined && override !== null ? Number(override) : Number(p.pts);
-      const ch = S.chores.find(x => x.name === p.name);      // เผื่อคิวเก่าที่ยังไม่มี pot
-      const cpot = p.pot || (ch && !ch.routine ? 'extra' : 'daily');
-      await addLog(Object.assign(logEntry(p.kidId,'chore',p.name,p.emo,pts,
-        {pot:cpot, due:p.due||'', status:p.status||'', lateMin:p.lateMin||0}), {ts:p.ts}));
-      toast('ให้ ' + pts + ' แต้มแล้ว');
-      await checkPerfectDay(p.kidId);
-    }else if(p.type === 'join'){           // ขอร่วมทีหลัง — หักคนขอครึ่งหนึ่ง แล้วคืนส่วนต่างให้คนที่จ่ายไปก่อน
-      const jpot = p.pot || 'daily';
-      const first = kidById(p.partnerId);
-      const me = kidById(p.kidId) || {};
-      await addLog(logEntry(p.kidId,'reward', p.name + ' (หารกัน)', p.emo,
-                            -Number(p.pts), {pot:jpot, rid:p.rid||''}));
-      if(first && Number(p.refund) > 0)
-        // ใช้ bankCommit แทน addLog เพื่อไม่ให้เงินคืนโดนหักใช้หนี้อัตโนมัติ — มันคือเงินที่จ่ายเกินไป ไม่ใช่รายได้ใหม่
-        await bankCommit(first.id, logEntry(first.id,'refund',
-          `คืนส่วนต่าง ${p.name} (${me.name||''} มาร่วมหาร)`, '↩️',
-          Number(p.refund), {pot:jpot, rid:p.rid||''}), null);
-      toast(`อนุมัติแล้ว — หัก ${p.pts} จาก${me.name||''} · คืน ${p.refund} ให้${(first||{}).name||''}`);
-    }else if(p.type === 'loan'){           // อนุมัติเงินกู้ — จ่ายต้นเข้ากระเป๋า แล้วเปิดบัญชีหนี้
-      const kid = kidById(p.kidId);
-      if(kid && !activeLoan(kid.id)){
-        const cs = p.partnerId ? kidById(p.partnerId) : null;
-        const rec = {id:uid(), kind:'loan', pot:'daily', amount:Number(p.pts),
-                     rate:Number(p.rate || cfg().loanPct || 0), paid:0,
-                     grace:Number(p.grace !== undefined ? p.grace : (cfg().loanGraceDays||0)),
-                     cosignId: cs ? cs.id : '', cosignName: cs ? cs.name : '',
-                     openTs:now(), dueTs: now() + Number(p.days || cfg().loanDays || 7)*DAYMS};
-        // ใช้ bankCommit (ไม่ใช่ addLog) เพราะไม่งั้นเงินที่เพิ่งยืมจะโดนหักใช้หนี้ทันที
-        await bankCommit(p.kidId, logEntry(p.kidId,'loan',`ยืมแต้ม (ต้องคืน ${p.total})`,'💳',
-                         Number(p.pts),{pot:'daily'}), bankOf(kid).concat([rec]));
-        if(cs && Number(p.hold) > 0)     // ล็อกแต้มของคนค้ำไว้ (ยังอยู่ในกระเป๋า แต่ใช้ไม่ได้)
-          await bankCommit(cs.id, null, bankOf(cs).concat([{id:uid(), kind:'collateral',
-            pot:'daily', amount:Number(p.hold), loanId:rec.id,
-            forId:p.kidId, forName:(kid.name||''), openTs:now()}]));
-        toast(`ให้ยืม ${p.pts} แต้มแล้ว — ต้องคืน ${p.total}${cs?` · ล็อกแต้มค้ำของ${cs.name} ${p.hold}`:''}`);
-      }else toast('ยังมีหนี้เดิมค้างอยู่ ยืมใหม่ไม่ได้');
-    }else if(p.type === 'unlock'){         // ถอนเงินฝากก่อนกำหนด — คืนเงินต้น ไม่มีดอก
-      const kid = kidById(p.kidId);
-      const rec = bankOf(kid).find(x => x.id === p.rid);
-      if(rec){
-        await bankCommit(p.kidId,
-          logEntry(p.kidId,'withdraw','ถอนก่อนกำหนด (ไม่ได้ดอก)','🏦',Number(rec.amount),{pot:rec.pot, iv:0}),
-          bankOf(kid).filter(x => x.id !== p.rid));
-        toast(`คืนเงินต้น ${rec.amount} แต้มแล้ว`);
-      }else toast('ไม่พบบัญชีเงินฝากนี้แล้ว');
-    }else if(p.type === 'transfer'){       // แบ่งแต้มให้พี่น้อง — หักคนให้ เพิ่มคนรับ กระเป๋าเดียวกัน
-      const tpot = p.pot || 'daily';
-      const giver = kidById(p.kidId), taker = kidById(p.partnerId);
-      const gName = (giver||{}).name || '', tName = p.partnerName || (taker||{}).name || '';
-      const tid = p.id;                    // ผูกสองฝั่งเข้าคู่กัน เผื่อพ่อแม่กดย้อนกลับทีหลัง
-      await addLog(logEntry(p.kidId,'transfer','แบ่งแต้มให้'+tName,'🤝',-Number(p.pts),{pot:tpot, rid:tid}));
-      if(taker) await addLog(logEntry(taker.id,'transfer','ได้แต้มจาก'+gName,'🎁',Number(p.pts),{pot:tpot, rid:tid}));
-      toast(`ย้าย ${p.pts} แต้มให้${tName}แล้ว`);
-    }else{
-      const rpot = p.pot || 'daily';
-      await addLog(logEntry(p.kidId,'reward',p.name,p.emo,-Number(p.pts),{pot:rpot, rid:p.rid||''}));
-      if(p.partnerId && kidById(p.partnerId)){        // หารกัน — หักอีกฝ่ายด้วย
-        await addLog(logEntry(p.partnerId,'reward',p.name + ' (หารกัน)',p.emo,-Number(p.partnerPts ?? p.pts),
-                              {pot:rpot, rid:p.rid||'', inv:true}));   // inv = ถูกชวนมาหาร
-        toast(`อนุมัติแล้ว หัก ${p.pts} และ ${p.partnerPts ?? p.pts} แต้ม`);
-      }else toast('อนุมัติแล้ว หัก ' + p.pts + ' แต้ม');
+/* Approvals read the latest request and wallets, then write the result as one transaction.
+   A retry sees the deleted request and cannot award or charge it twice. */
+const quotaRef = () => dref('config', 'walletQuota-' + weekStartTs());
+const approvalError = msg => { const e=new Error(msg); e.userMessage=true; throw e; };
+const walletOfDoc = k => Number(k.points||0)+Number(k.extra||0);
+const pendingCost = (p,kidId) => {
+  if(p.type==='reward' && (p.kidId===kidId || p.partnerId===kidId))
+    return Number(p.partnerId===kidId ? (Number(p.partnerPts)>0 ? p.partnerPts
+      : Number(p.total)>0 ? Number(p.total)-Number(p.pts) : p.pts) : p.pts);
+  if((p.type==='transfer'||p.type==='join') && p.kidId===kidId) return Number(p.pts);
+  if(p.type==='loan' && p.partnerId===kidId) return Number(p.hold||0);
+  return 0;
+};
+function spendableDoc(kidId,k,pendingRows,excludeId){
+  const reservations=pendingRows.filter(p=>p.id!==excludeId).reduce((n,p)=>n+pendingCost(p,kidId),0);
+  const collateral=bankOf(k).filter(b=>b.kind==='collateral').reduce((n,b)=>n+Number(b.amount||0),0);
+  return walletOfDoc(k)-reservations-collateral;
+}
+const approvalReward = p => S.rewards.find(r=>r.id===p.rid)
+  || S.rewards.find(r=>rewardGroup(r)===rewardGroup(p)) || p;
+const familyRewardGroup = g => g==='dinner'||g==='icecream';
+function acceptedCount(history,g,kidId,since){
+  return history.filter(l=>l.kind==='reward' && Number(l.ts)>=since
+    && rewardGroup(rewardForEvent(l))===g
+    && (familyRewardGroup(g)
+      ? !l.inv && !String(l.name||'').includes('(หารกัน)')
+      : l.kidId===kidId)).length;
+}
+function lastAccepted(history,g,kidId){
+  return history.filter(l=>l.kind==='reward' && l.kidId===kidId
+    && rewardGroup(rewardForEvent(l))===g)
+    .reduce((last,l)=>Math.max(last,Number(l.ts)||0),0);
+}
+function cooldownEnd(ts,months){
+  const end=new Date(ts), day=end.getDate();
+  end.setDate(1); end.setMonth(end.getMonth()+months);
+  end.setDate(Math.min(day,new Date(end.getFullYear(),end.getMonth()+1,0).getDate()));
+  return end.getTime();
+}
+function reserveApprovedQuota(lock,reward,participants,history,ts,joining,kidDocs){
+  const g=rewardGroup(reward), counts={...(lock.counts||{})};
+  const day=dayStartTs(), week=weekStartTs();
+  const targets=familyRewardGroup(g) ? (joining?[]:['family']) : participants;
+  for(const id of targets){
+    const limits=familyRewardGroup(g) ? [[`w-${g}-family`,week,Number(reward.limitWeek||0)]]
+      : [[`d-${g}-${id}-${day}`,day,Number(reward.limitDay||0)],
+         [`w-${g}-${id}`,week,Number(reward.limitWeek||0)]];
+    for(const [key,since,max] of limits){
+      if(!max) continue;
+      const actual=acceptedCount(history,g,id,since);
+      const used=Math.max(Number(counts[key]||0),actual);
+      if(used>=max) approvalError('โควตา '+reward.name+' เต็มแล้ว กรุณาตรวจหรือปฏิเสธคำขอนี้');
+      counts[key]=used+1;
     }
-  }catch(e){ fail(e); }
+  }
+  const cooldowns={};
+  if(Number(reward.cooldownMonths||0) && !joining){
+    for(const id of participants){
+      const k=kidDocs[id], old={...(k.rewardCooldowns||{})};
+      const last=Math.max(Number(old[g]||0),lastAccepted(history,g,id));
+      if(last && ts<cooldownEnd(last,Number(reward.cooldownMonths)))
+        approvalError('รางวัล '+reward.name+' ยังไม่ครบระยะเว้น '+reward.cooldownMonths+' เดือน');
+      old[g]=ts; cooldowns[id]=old;
+    }
+  }
+  return {counts,cooldowns};
+}
+async function approve(pid, override){
+  const shown=S.pending.find(x=>x.id===pid); if(!shown) return;
+  try{
+    const needsQuota=shown.type==='reward'||shown.type==='join';
+    const [pendingSnap,historySnap]=await Promise.all([
+      shown.type==='chore'||shown.type==='unlock' ? Promise.resolve(null) : getDocsFromServer(col('pending')),
+      needsQuota ? getDocsFromServer(query(col('log'),where('kind','==','reward'))) : Promise.resolve(null)
+    ]);
+    const pendingRefs=pendingSnap ? pendingSnap.docs.map(d=>d.ref).filter(ref=>ref.id!==pid) : [];
+    const history=historySnap ? historySnap.docs.map(d=>d.data()) : [];
+    const result=await runTransaction(db,async tx=>{
+      const pref=dref('pending',pid), ps=await tx.get(pref);
+      if(!ps.exists()) return null; // another device already approved/rejected this request
+      const p=ps.data();
+      const kidRef=dref('kids',p.kidId), kidSnap=await tx.get(kidRef);
+      if(!kidSnap.exists()) approvalError('ไม่พบเด็กเจ้าของคำขอ');
+      const kids={[p.kidId]:kidSnap.data()}, refs={[p.kidId]:kidRef};
+      if(p.partnerId){
+        refs[p.partnerId]=dref('kids',p.partnerId);
+        const partner=await tx.get(refs[p.partnerId]);
+        if(!partner.exists()) approvalError('ไม่พบเด็กอีกคน');
+        kids[p.partnerId]=partner.data();
+      }
+      if(p.type==='chore'){
+        const loan=bankOf(kids[p.kidId]).find(x=>x.kind==='loan');
+        if(loan?.cosignId && !kids[loan.cosignId]){
+          const ref=dref('kids',loan.cosignId),snap=await tx.get(ref);
+          if(snap.exists()){ refs[loan.cosignId]=ref; kids[loan.cosignId]=snap.data(); }
+        }
+      }
+      const otherPending=pendingRefs.length ? (await Promise.all(pendingRefs.map(ref=>tx.get(ref))))
+        .filter(s=>s.exists()).map(s=>s.data()) : [];
+      let quotaSnap=null, quota={}, source=null, sourceId='', qref=null;
+      if(p.type==='reward'||p.type==='join'){
+        qref=quotaRef(); quotaSnap=await tx.get(qref); quota=quotaSnap.exists()?quotaSnap.data():{};
+        if(p.type==='join'){
+          sourceId=p.sourceLogId || (historySnap.docs.find(d=>{
+            const l=d.data(); return l.kind==='reward' && l.kidId===p.partnerId
+              && l.rid===p.rid && Math.abs(Number(l.delta))===Number(p.total)
+              && dstr(l.ts)===dstr(p.ts);
+          })||{}).id;
+          if(!sourceId) approvalError('หารายการที่จ่ายเต็มไว้เดิมไม่พบ');
+          const sourceSnap=await tx.get(dref('log',sourceId));
+          if(!sourceSnap.exists()) approvalError('รายการจ่ายเดิมถูกเปลี่ยนแล้ว');
+          source=sourceSnap.data();
+          if(source.kind!=='reward' || source.rid!==p.rid || source.kidId!==p.partnerId
+             || Math.abs(Number(source.delta))!==Number(p.total)
+             || (quota.joinedSources||{})[sourceId]) approvalError('รายการนี้มีคนร่วมหารแล้ว');
+        }
+      }
+      const updates={}, logs=[], ts=now();
+      const put=(id,entry)=>{entry.id='wallet-approval-'+pid+'-'+id+'-'+logs.length;logs.push(entry);};
+      const requireFunds=(id,amount)=>{
+        if(!Number.isSafeInteger(amount)||amount<0||spendableDoc(id,kids[id],otherPending,pid)<amount)
+          approvalError('แต้มของ '+String(kids[id].name||'เด็ก')+' ไม่พอหลังหักคำขอที่จองไว้');
+      };
+      let earned=null, postLoan=null;
+      if(p.type==='chore'){
+        const pts=override===undefined||override===null?Number(p.pts):Number(override);
+        if(!Number.isSafeInteger(pts)||pts<0||pts>Math.max(Number(p.full||0),Number(p.pts||0)))
+          approvalError('แต้มงานไม่ถูกต้อง');
+        const entry=logEntry(p.kidId,'chore',p.name,p.emo,pts,
+          {pot:p.pot||'daily',due:p.due||'',status:p.status||'',lateMin:p.lateMin||0});
+        entry.ts=p.ts; put(p.kidId,entry);
+        const warm=pts>0&&p.status==='ontime'?WARM_ONTIME:0;
+        const k=kids[p.kidId], beforeXp=Number(k.xp||0), beforeWarm=Number(k.eggWarm||0);
+        const u={points:increment(pts)};
+        if(pts>0) u.xp=increment(pts);
+        if(warm) u.eggWarm=increment(warm);
+        const arr=bankOf(k), i=arr.findIndex(x=>x.kind==='loan');
+        if(i>=0 && pts>0 && bankOn()){
+          const owed=loanOwed(arr[i]), rate=Number(cfg().loanRepayPct||0)/100;
+          const pay=rate>0?Math.min(Math.max(1,Math.ceil(pts*rate)),owed.left,
+            Math.max(0,walletOfDoc(k)+pts)):0;
+          if(pay>0){
+            const next=arr.slice(), done=owed.paid+pay>=owed.total;
+            if(done) next.splice(i,1); else next[i]={...arr[i],paid:owed.paid+pay};
+            u.points=increment(pts-pay); u.bank=next;
+            put(p.kidId,logEntry(p.kidId,'repay',done?'ใช้หนี้งวดสุดท้าย — ปิดหนี้แล้ว 🎉':'หักใช้หนี้อัตโนมัติ','💳',-pay,{pot:'daily'}));
+            postLoan={done,loan:arr[i],late:owed.late};
+            if(done && arr[i].cosignId && kids[arr[i].cosignId])
+              updates[arr[i].cosignId]={bank:bankOf(kids[arr[i].cosignId])
+                .filter(x=>!(x.kind==='collateral' && x.loanId===arr[i].id))};
+          }
+        }
+        updates[p.kidId]=u;
+        if(pts>0) tx.set(dref('adventureTickets',entry.id),
+          {id:entry.id,kidId:p.kidId,state:'ready',createdAt:entry.ts});
+        earned={kidId:p.kidId,beforeXp,beforeWarm,pts,warm};
+      }else if(p.type==='reward'){
+        const amount=Number(p.pts), total=Number(p.total), hasPartner=!!p.partnerId;
+        const partnerAmount=hasPartner ? (Number(p.partnerPts)>0?Number(p.partnerPts):total-amount) : 0;
+        if(!Number.isSafeInteger(total)||total<=0||!Number.isSafeInteger(amount)||amount<=0
+          ||!Number.isSafeInteger(partnerAmount)||partnerAmount<0||amount+partnerAmount!==total
+          ||(hasPartner&&partnerAmount===0)) approvalError('ส่วนแบ่งรางวัลไม่ตรงกับราคา');
+        requireFunds(p.kidId,amount);
+        if(hasPartner) requireFunds(p.partnerId,partnerAmount);
+        const reward=approvalReward(p), participants=hasPartner?[p.kidId,p.partnerId]:[p.kidId];
+        const checked=reserveApprovedQuota(quota,reward,participants,history,ts,false,kids);
+        quota={...quota,counts:checked.counts};
+        for(const [id,cooldowns] of Object.entries(checked.cooldowns))
+          updates[id]={...(updates[id]||{}),rewardCooldowns:cooldowns};
+        updates[p.kidId]={...(updates[p.kidId]||{}),points:increment(-amount)};
+        put(p.kidId,logEntry(p.kidId,'reward',p.name,p.emo,-amount,{pot:p.pot||'daily',rid:p.rid||'',requestId:pid}));
+        if(hasPartner){
+          updates[p.partnerId]={...(updates[p.partnerId]||{}),points:increment(-partnerAmount)};
+          put(p.partnerId,logEntry(p.partnerId,'reward',p.name+' (หารกัน)',p.emo,-partnerAmount,
+            {pot:p.pot||'daily',rid:p.rid||'',requestId:pid,inv:true}));
+        }
+      }else if(p.type==='join'){
+        const amount=Number(p.pts), refund=Number(p.refund);
+        if(!Number.isSafeInteger(amount)||amount<=0||!Number.isSafeInteger(refund)||refund<0
+          ||amount+refund!==Number(p.total)||dstr(source.ts)!==todayStr())
+          approvalError('คำขอร่วมนี้ไม่ตรงกับรายการเดิมหรือข้ามวันแล้ว');
+        requireFunds(p.kidId,amount);
+        const reward=approvalReward(p), checked=reserveApprovedQuota(quota,reward,[p.kidId],history,ts,true,kids);
+        quota={...quota,counts:checked.counts,joinedSources:{...(quota.joinedSources||{}),[sourceId]:pid}};
+        updates[p.kidId]={points:increment(-amount)};
+        updates[p.partnerId]={points:increment(refund)};
+        put(p.kidId,logEntry(p.kidId,'reward',p.name+' (หารกัน)',p.emo,-amount,
+          {pot:p.pot||'daily',rid:p.rid||'',requestId:pid,inv:true}));
+        put(p.partnerId,logEntry(p.partnerId,'refund',`คืนส่วนต่าง ${p.name} (${kids[p.kidId].name||''} มาร่วมหาร)`,
+          '↩️',refund,{pot:p.pot||'daily',rid:p.rid||'',requestId:pid}));
+      }else if(p.type==='transfer'){
+        const amount=Number(p.pts); requireFunds(p.kidId,amount);
+        updates[p.kidId]={points:increment(-amount)};
+        updates[p.partnerId]={points:increment(amount)};
+        put(p.kidId,logEntry(p.kidId,'transfer','แบ่งแต้มให้'+(kids[p.partnerId].name||''),'🤝',-amount,
+          {pot:p.pot||'daily',rid:pid}));
+        put(p.partnerId,logEntry(p.partnerId,'transfer','ได้แต้มจาก'+(kids[p.kidId].name||''),'🎁',amount,
+          {pot:p.pot||'daily',rid:pid}));
+      }else if(p.type==='loan'){
+        const k=kids[p.kidId], amount=Number(p.pts), arr=bankOf(k);
+        if(!Number.isSafeInteger(amount)||amount<=0||arr.some(x=>x.kind==='loan'||x.kind==='deposit'))
+          approvalError('มีหนี้หรือเงินฝากเดิมอยู่แล้ว อนุมัติยืมไม่ได้');
+        const rec={id:'loan-'+pid,kind:'loan',pot:'daily',amount,
+          rate:Number(p.rate??cfg().loanPct),paid:0,
+          grace:Number(p.grace??cfg().loanGraceDays),
+          cosignId:p.partnerId||'',cosignName:p.partnerName||'',
+          openTs:ts,dueTs:ts+Number(p.days||cfg().loanDays||14)*DAYMS};
+        updates[p.kidId]={points:increment(amount),bank:arr.concat([rec])};
+        put(p.kidId,logEntry(p.kidId,'loan',`ยืมแต้ม (ต้องคืน ${p.total})`,'💳',amount,{pot:'daily'}));
+        if(p.partnerId&&Number(p.hold)>0){
+          const hold=Number(p.hold);
+          requireFunds(p.partnerId,hold);
+          updates[p.partnerId]={bank:bankOf(kids[p.partnerId]).concat([{id:'hold-'+pid,kind:'collateral',
+            pot:'daily',amount:hold,loanId:rec.id,forId:p.kidId,forName:k.name||'',openTs:ts}])};
+        }
+      }else if(p.type==='unlock'){
+        const k=kids[p.kidId], rec=bankOf(k).find(x=>x.id===p.rid);
+        if(!rec||rec.kind!=='deposit') approvalError('ไม่พบบัญชีเงินฝากนี้แล้ว');
+        updates[p.kidId]={points:increment(Number(rec.amount)),bank:bankOf(k).filter(x=>x.id!==rec.id)};
+        put(p.kidId,logEntry(p.kidId,'withdraw','ถอนก่อนกำหนด (ไม่ได้ดอก)','🏦',Number(rec.amount),
+          {pot:rec.pot,iv:0}));
+      }else approvalError('ชนิดคำขอไม่รองรับ');
+      for(const [id,u] of Object.entries(updates)) tx.update(refs[id],u);
+      for(const entry of logs) tx.set(dref('log',entry.id),entry);
+      if(qref) tx.set(qref,quota);
+      tx.delete(pref);
+      return {type:p.type,earned,postLoan};
+    });
+    if(!result) return;
+    toast('อนุมัติแล้ว');
+    try{
+      if(result.earned){
+        const e=result.earned;
+        if(e.pts>0) await afterEarn(e.kidId,e.beforeXp,e.pts,e.beforeWarm,e.warm);
+        await checkPerfectDay(e.kidId);
+      }
+      if(result.postLoan?.late>0 && !result.postLoan.done) await seizeCollateral(result.earned.kidId);
+    }catch(e){ console.error('Approval saved; follow-up effect failed',e); }
+  }catch(e){ if(e?.userMessage) toast(e.message); else fail(e); }
 }
 function reject(pid){
-  const p = S.pending.find(x => x.id===pid); if(!p) return;
-  openConfirm('ไม่ผ่าน', `"${p.name}" จะถูกตีกลับ ไม่ได้/ไม่เสียแต้ม`, async () => {
-    try{ await deleteDoc(dref('pending', pid)); toast('ตีกลับแล้ว'); }catch(e){ fail(e); }
+  const p=S.pending.find(x=>x.id===pid); if(!p) return;
+  openConfirm('ไม่ผ่าน',`"${p.name}" จะถูกตีกลับ ไม่ได้/ไม่เสียแต้ม`,async()=>{
+    try{
+      const removed=await runTransaction(db,async tx=>{
+        const ref=dref('pending',pid),snap=await tx.get(ref);
+        if(!snap.exists()) return false;
+        tx.delete(ref); return true;
+      });
+      toast(removed?'ตีกลับแล้ว':'รายการนี้ถูกจัดการแล้ว');
+    }catch(e){fail(e);}
   });
 }
 function parentPoints(){
