@@ -863,9 +863,8 @@ function evalTiming(c, t){
   const lateMs = t - dueDateOf(due, t);
   const late = Math.max(0, Math.ceil(lateMs/60000));
   if(late <= 0) return {status:'ontime', lateMin:0, pts:full};
-  if(lateMs <= Number(c.grace ?? 15)*60000)
-    return {status:'late', lateMin:late, pts:Math.floor(full*Number(c.latePct ?? 50)/100)};
-  return {status:'toolate', lateMin:late, pts:0};
+  // Timing stays visible as information; finishing the task always earns full credit.
+  return {status:lateMs <= Number(c.grace ?? 15)*60000 ? 'late' : 'toolate', lateMin:late, pts:full};
 }
 const STATUS_TXT = {ontime:'ทันเวลา', late:'สายนิดหน่อย', toolate:'สายเกินไป'};
 const STATUS_COL = {ontime:'var(--good)', late:'var(--gold)', toolate:'var(--warn)'};
@@ -902,8 +901,8 @@ function nextDowTs(dow){                 // timestamp ของวัน dow ใ
 /* โบนัสตรงเวลาครบทั้งวัน คิดตามสัดส่วนงานของวันนั้น — วันงานน้อยได้โบนัสน้อยลงตามส่วน
    ทำให้โบนัสรวมทั้งสัปดาห์เท่าเดิม ไม่ว่าจะย้ายงานไปวันไหน (กันแต้มเฟ้อ) */
 function bonusFor(kidId){
-  const b = Number(cfg().perfectBonus || 0); if(!b) return 0;
-  return routineFor(kidId).length ? b : 0;
+  // Retain legacy settings and entries, but do not issue new perfect-day bonuses.
+  return 0;
 }
 function routineProgress(kidId){
   const list = routineFor(kidId);
@@ -967,7 +966,7 @@ async function addLog(entry){
   if(earn) u.xp = increment(d);
   // ความอบอุ่นของไข่ — ได้จาก "ตรงเวลา" เท่านั้น ซื้อไม่ได้ แลกไม่ได้
   const warm = entry.kind === 'bonus' ? WARM_PERFECT
-             : (entry.kind === 'chore' && entry.status === 'ontime') ? WARM_ONTIME : 0;
+             : entry.kind === 'chore' ? WARM_ONTIME : 0;
   if(warm) u.eggWarm = increment(warm);
   // อ่านค่าก่อนเขียน — หลัง commit แล้ว S อาจอัปเดตหรือยังไม่อัปเดตก็ได้ (snapshot มาไม่แน่นอน)
   // ถ้าไปอ่านทีหลังจะนับซ้ำหรือหลุดได้ จึงล็อกค่าตั้งต้นไว้ตรงนี้เลย
@@ -1001,7 +1000,7 @@ async function checkHatch(kidId, warm){
       {pets: owned.concat([P.e]), eggWarm: Math.max(0, warm - need)});
     cheer.push({lv:3, emo:P.e, title:`ไข่ฟักแล้ว! ${P.r===2?'✨ ตำนาน ✨':P.r===1?'⭐ หายาก':'🎊'}`,
       big:`${P.n} · ${P.th}`, color:R.c,
-      sub:`สัตว์ระดับ "${R.k}" — ฟักได้จากการทำงานตรงเวลาเท่านั้น ซื้อด้วยแต้มไม่ได้นะ`,
+      sub:`สัตว์ระดับ "${R.k}" — ไข่อุ่นขึ้นเมื่อทำงานเสร็จ ซื้อด้วยแต้มไม่ได้นะ`,
       toast:`ไข่ฟักแล้ว! ได้ ${P.e} ${P.n} (${R.k})`});
   }catch(e){ fail(e); }
 }
@@ -1288,13 +1287,13 @@ function choreState(c, kidId){
   const t = evalTiming(c);
   return (t.status === 'late' || t.status === 'toolate') ? 'late' : 'ready';
 }
-const STATE_ICON = {done:'✅', parent:'👩', early:'⏳', locked:'🔒', late:'⚠️', ready:'👉'};
+const STATE_ICON = {done:'✅', parent:'👩', early:'⏳', locked:'🔒', late:'👉', ready:'👉'};
 
 /* แถบติดตาม — เห็นทั้งวันในแถวเดียว ว่าทำอะไรไปแล้วบ้าง */
 function taskStrip(kidId){
   const list = routineFor(kidId).slice().sort((a,b) => (a.due||'99') < (b.due||'99') ? -1 : 1);
   if(!list.length) return '';
-  const cls = {done:'done', ready:'now', late:'late', early:'wait', locked:'wait', parent:'wait'};
+  const cls = {done:'done', ready:'now', late:'now', early:'wait', locked:'wait', parent:'wait'};
   return `<div class="strip">${list.map(c => {
     const st = choreState(c, kidId);
     return `<div class="chip ${cls[st]}" title="${esc(c.name)}">
@@ -1400,23 +1399,20 @@ function choreRow(c, kidId){
     const mins = dueFor(c) ? Math.round((dueDateOf(dueFor(c)) - now())/60000) : null;
     if(!dueFor(c)){ state = '👉'; sub = ''; cls = 'ready'; }
     else if(mins > 0){ state = '👉'; cls = 'ready';
-      sub = `<span class="bignum">${dueFor(c)}</span> <span style="color:var(--good)">${mins}′</span>`; }
-    else if(t.status === 'late'){ state = '⚠️'; cls = 'warn';
-      sub = `<span class="bignum">${dueFor(c)}</span> <span style="color:var(--gold)">+${t.lateMin}′</span>`; }
-    else { state = '⚠️'; cls = 'warn';
-      sub = `<span class="bignum">${dueFor(c)}</span> <span style="color:var(--warn)">+${t.lateMin}′</span>`; }
+      sub = `<span class="bignum">กำหนด ${dueFor(c)}</span>`; }
+    else if(t.status === 'late' || t.status === 'toolate'){ state = '👉'; cls = 'ready';
+      sub = `<span class="bignum">${dueFor(c)}</span> · ทำได้เลย`; }
     btn = `<button class="btn-good btn-done" onclick="doChore('${c.id}')">✓ Done</button>`;
   }
-  const shownPts = (!used && dueFor(c)) ? t.pts : Number(c.pts);
-  // โชว์แท่งเวลาเฉพาะงานที่ "กดได้ตอนนี้" และมีเส้นตาย — งานที่ทำแล้ว/ยังไม่ถึงเวลา/ล็อกคิว ไม่ต้องรก
-  const timer = (!used && !early && !prev && c.by !== 'parent' && dueFor(c)) ? countdown(c) : '';
-  return `<div class="item ${cls}" style="${timer?'flex-wrap:wrap':''}">
+  const shownPts = Number(c.pts);
+  const helpPending = S.pending.some(p => p.type==='help' && p.kidId===kidId && p.rid===c.id);
+  const helpBtn = used ? '' : `<button class="btn-sm" ${helpPending?'disabled':''} onclick="requestHelp('${c.id}')">${helpPending?'ขอช่วยแล้ว':'🙋 ขอช่วย'}</button>`;
+  return `<div class="item ${cls}" style="flex-wrap:wrap">
     <div class="emo">${c.emo}</div>
     <div class="txt"><b>${esc(c.name)}</b><span class="muted">${sub}</span></div>
     <span class="state">${state}</span>
     <span class="tag ${shownPts>0?'tag-plus':'tag-minus'}">+${shownPts}</span>
-    ${btn}
-    ${timer ? `<div style="flex-basis:100%">${timer}</div>` : ''}</div>`;
+    ${btn}${helpBtn}</div>`;
 }
 function todayCard(k){
   const pr = routineProgress(k.id);
@@ -1424,32 +1420,19 @@ function todayCard(k){
     <div class="row"><span style="font-size:30px">🌴</span>
       <div style="flex:1"><b>วันหยุด — ไม่มีกิจวัตรวันนี้</b>
         <div class="muted">พักผ่อนได้เต็มที่ ทำงานเสริมเก็บแต้มก็ได้นะ</div></div></div></div>`;
+  const next = pr.left.find(c => choreState(c, k.id)==='ready') || pr.left[0];
+  const nextText = pr.complete ? 'วันนี้ทำครบแล้ว เยี่ยมมาก!'
+    : next ? `งานถัดไป: ${next.emo} ${esc(next.name)}` : 'เลือกทำงานที่พร้อมได้เลย';
   const s = todayScore(k.id);
-  const col = s.pct >= 100 ? 'var(--good)' : s.pct >= 80 ? 'var(--good)'
-            : s.pct >= 50 ? 'var(--gold)' : 'var(--warn)';
-  const face = s.pct >= 100 ? '🏆' : s.pct >= 80 ? '😄' : s.pct >= 50 ? '🙂' : '💪';
-  const msg  = s.pct >= 100 ? 'เพอร์เฟกต์! ได้โบนัสครบทุกแต้ม'
-             : s.pct >= 80  ? 'เก่งมาก อีกนิดเดียวก็เต็ม'
-             : s.pct >= 50  ? 'มาได้ครึ่งทางแล้ว สู้ต่อ!'
-             : 'เริ่มเลย! ทำได้เท่าไหร่ก็ได้แต้มเท่านั้น';
-  return `<div class="card" style="border:2px solid ${col}55">
-    <div class="row-between" style="align-items:flex-end">
-      <div><div class="sec-title" style="margin:0">📊 แต้มวันนี้</div>
-        <div style="font-size:26px;font-weight:800;color:${col}">${s.core} <span
-          style="font-size:15px;color:var(--muted);font-weight:600">/ ${s.max} แต้ม</span></div></div>
-      <div style="text-align:right"><div style="font-size:30px;line-height:1">${face}</div>
-        <div style="font-size:30px;font-weight:800;color:${col};line-height:1">${s.pct}%</div></div>
-    </div>
-    <div class="prog" style="margin-top:10px"><i style="width:${Math.min(100,s.pct)}%;background:${col}"></i></div>
-    <div class="row-between">
-      <span class="muted">${msg}</span>
-      <b class="bignum" style="color:${col};font-size:15px">${pr.done}/${pr.total}</b>
-    </div>
+  return `<div class="card">
+    <div class="row-between"><div><div class="sec-title" style="margin:0">📋 เช็กลิสต์วันนี้</div>
+      <div style="font-size:22px;font-weight:800;margin-top:4px">ทำแล้ว ${pr.done} จาก ${pr.total} งาน</div></div>
+      <div style="font-size:30px">${pr.complete?'🎉':'✅'}</div></div>
+    <div class="muted" style="margin-top:6px">${nextText}</div>
     ${taskStrip(k.id)}
-    ${(s.extra || s.waiting || s.minus) ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">
-      ${s.extra   ? `<span class="tag tag-cost">💎 +${s.extra} แต้มวันนี้</span>` : ''}
-      ${s.waiting ? `<span class="tag tag-wait">รอตรวจอีก ${s.waiting}</span>` : ''}
-      ${s.minus   ? `<span class="tag tag-minus">${s.minus} จากการหักแต้ม</span>` : ''}
+    ${(s.extra || s.waiting) ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">
+      ${s.extra ? `<span class="tag tag-cost">💎 +${s.extra} แต้มวันนี้</span>` : ''}
+      ${s.waiting ? `<span class="tag tag-wait">รอตรวจ +${s.waiting} แต้ม</span>` : ''}
     </div>` : ''}
   </div>`;
 }
@@ -1465,6 +1448,8 @@ function viewKid(){
   let body = '';
   if(view.tab === 'chores'){
     const waiting = myPend.filter(p => p.type==='chore');
+    const waitingHelp = myPend.filter(p => p.type==='help');
+    const helpBox = waitingHelp.length ? `<div class="card" style="background:var(--gold-soft)"><b>🙋 ขอความช่วยเหลือแล้ว</b><div class="muted" style="margin-top:4px">ผู้ปกครองจะเห็นข้อความนี้: ${waitingHelp.map(p=>esc(p.name)).join(', ')}</div></div>` : '';
     const waitBox = waiting.length ? `<div class="card" style="background:var(--navy-soft)">
       <div class="sec-title" style="margin:0 0 6px">⏳ รอผู้ปกครองตรวจ</div>
       ${waiting.map(p => `<div class="log-line" style="border-color:#d8e0ee">
@@ -1476,11 +1461,12 @@ function viewKid(){
     const anytime = today.filter(c => !c.due);
     const routineList = timed.filter(c => c.routine).concat(anytime.filter(c => c.routine));
     const extraList   = timed.filter(c => !c.routine).concat(anytime.filter(c => !c.routine));
-    body = petCard(k) + todayCard(k) + waitBox
+    body = todayCard(k) + helpBox + waitBox
       + (routineList.length ? `<div class="sec-title">⏰ กิจวัตรวันนี้${cfg().stepOrder?' — ทำเรียงตามลำดับ':''}</div>`
           + routineList.map(c => choreRow(c,k.id)).join('') : '')
       + (extraList.length ? `<div class="sec-title">⭐ งานเสริม — ทำเพิ่มได้แต้มเพิ่ม</div>`
-          + extraList.map(c => choreRow(c,k.id)).join('') : '');
+          + extraList.map(c => choreRow(c,k.id)).join('') : '')
+      + petCard(k);
   }else if(view.tab === 'rewards'){
     const waiting = myPend.filter(p => p.type==='reward' || p.type==='transfer' || p.type==='join');
     const waitBox = waiting.length ? `<div class="card" style="background:var(--gold-soft)">
@@ -1558,7 +1544,6 @@ function viewKid(){
     body = mine.length ? `<div class="card">${mine.map(l => logLine(l,false)).join('')}</div>`
                        : '<div class="empty">ยังไม่มีประวัติ</div>';
   }
-  const streak = onTimeStreak(k.id);
   const xp = Number(k.xp||0), LV = levelOf(xp);
   const xpPct = Math.max(3, Math.min(100, Math.round((xp - LV.at) / Math.max(1, LV.next - LV.at) * 100)));
   const resD = reserved(k.id);
@@ -1572,20 +1557,18 @@ function viewKid(){
       </div>
       <button onclick="go('pick')">ออก ✕</button>
     </div>
-    <div style="margin-bottom:12px">
+    ${view.tab==='chores' ? '' : `<div style="margin-bottom:12px">
       <div class="card" style="margin:0;background:linear-gradient(135deg,${k.color}22,var(--card));border:2px solid ${k.color}55">
         <div class="muted">⭐ แต้มที่ใช้ได้</div>
         <div class="points-big" style="color:${k.color}">${availD}</div>
         <div class="muted" style="font-size:12px">รวมแต้มเดิม 1:1 · ใช้แลกรางวัลทุกประเภท${resD?` · จองไว้ ${resD}`:''}</div>
       </div>
-    </div>
-    ${S.kids.length > 1 ? `<button class="btn-full" style="margin-bottom:12px" onclick="openGive()">
+    </div>`}
+    ${S.kids.length > 1 && view.tab!=='chores' ? `<button class="btn-full" style="margin-bottom:12px" onclick="openGive()">
       🤝 แบ่งแต้มให้พี่น้อง${giveCap() ? ` · วันนี้แบ่งได้อีก ${giveLeft(k.id)}` : ''}</button>` : ''}
-    ${streak > 0 ? `<div class="card" style="text-align:center;padding:10px">
-      <span style="font-size:22px">🔥</span>
-      <b style="color:var(--gold)"> ตรงเวลาครบ ${streak} วันติด</b></div>` : ''}
     <div class="tabs">${tabBtns}</div>
-    ${body}`;
+    ${body}
+    ${view.tab==='chores' ? `<div class="row-between" style="margin:12px 2px;padding:8px 4px"><span class="muted">⭐ แต้มที่ใช้ได้ ${availD}${resD?` · จองไว้ ${resD}`:''}</span>${S.kids.length>1?`<button class="btn-sm" onclick="openGive()">🤝 แบ่งแต้มให้พี่น้อง</button>`:''}</div>` : ''}`;
 }
 function logLine(l, withUndo){
   const kid = kidById(l.kidId);
@@ -1605,6 +1588,15 @@ function logLine(l, withUndo){
 }
 
 /* ---------- การกระทำของเด็ก ---------- */
+async function requestHelp(choreId){
+  const c=S.chores.find(x=>x.id===choreId), k=kidById(view.kidId); if(!c||!k) return;
+  if(S.pending.some(p=>p.type==='help'&&p.kidId===k.id&&p.rid===c.id)){ toast('ส่งคำขอช่วยเรื่องนี้ไปแล้ว'); return; }
+  try{
+    const p={id:uid(),type:'help',kidId:k.id,rid:c.id,name:c.name,emo:c.emo,ts:now()};
+    await setDoc(dref('pending',p.id),p);
+    toast('ส่งคำขอช่วยแล้ว');
+  }catch(e){ fail(e); }
+}
 async function doChore(id){
   const c = S.chores.find(x => x.id===id); if(!c) return;
   if(c.once && doneToday(view.kidId, c.name)){ toast('งานนี้ทำไปแล้ววันนี้'); return; }
@@ -1615,17 +1607,15 @@ async function doChore(id){
   const commit = async () => {
     try{
       const statusTxt = t.status==='ontime' ? 'ทันเวลา! 🎉'
-                      : t.status==='late'   ? `สาย ${t.lateMin} นาที`
-                      : t.status==='toolate'? `สาย ${t.lateMin} นาที — รอบหน้าเอาใหม่นะ` : 'เรียบร้อย';
+                      : t.status==='late' || t.status==='toolate' ? `ทำเสร็จแล้ว ได้แต้มเต็ม · เวลาที่ตั้งไว้ ${t.lateMin} นาทีที่ผ่านมา` : 'เรียบร้อย';
       if(cfg().approveChores){
         const p = {id:uid(), ts:now(), kidId:view.kidId, type:'chore', name:c.name, emo:c.emo,
                    pts:t.pts, full:Number(c.pts), pot: c.routine ? 'daily' : 'extra',
                    due:dueFor(c)||'', status:t.status, lateMin:t.lateMin};
         await setDoc(dref('pending', p.id), p);
-        const pr = routineProgress(view.kidId);
         showFlash({emo:c.emo, title:c.name, big:'ส่งแล้ว ✓', color:'var(--navy)',
           sub:`${statusTxt} · รอคุณพ่อคุณแม่ตรวจ`,
-          extra: `แต้มวันนี้ ${todayScore(view.kidId).core}/${todayScore(view.kidId).max} (${todayScore(view.kidId).pct}%)`,
+          extra: 'ผู้ปกครองจะตรวจและให้แต้มเต็มเมื่องานเสร็จ',
           toast:`ส่งแล้ว รอตรวจ ${c.emo}`});
       }else{
         await addLog(logEntry(view.kidId, 'chore', c.name, c.emo, t.pts,
@@ -1636,9 +1626,9 @@ async function doChore(id){
           big: t.pts>0 ? `+${t.pts} แต้ม` : 'ไม่ได้แต้ม',
           color: t.pts>0 ? 'var(--good)' : 'var(--warn)',
           sub: statusTxt,
-          extra: gotBonus ? `🏅 ตรงเวลาครบทั้งวัน! โบนัสอีก +${bonusFor(view.kidId)} แต้ม — วันนี้ 100% เต็ม`
-               : `แต้มวันนี้ ${todayScore(view.kidId).core}/${todayScore(view.kidId).max} (${todayScore(view.kidId).pct}%)`,
-          toast: t.pts>0 ? `ได้ ${t.pts} แต้ม ${c.emo}` : 'บันทึกเวลาแล้ว แต่สายเกินไปเลยไม่ได้แต้ม'});
+          extra: gotBonus ? `🏅 โบนัสวันนี้ +${bonusFor(view.kidId)} แต้ม`
+               : 'ทำเสร็จแล้ว ได้แต้มเต็ม',
+          toast: `ได้ ${t.pts} แต้ม ${c.emo}`});
       }
     }catch(e){ fail(e); }
   };
@@ -2082,12 +2072,9 @@ const petStOf = k => (k && k.petst && k.pet && k.petst[k.pet]) || null;
 const activePet = k => (k && k.pet && (k.pets||[]).indexOf(k.pet) >= 0) ? k.pet
                      : ((k && (k.pets||[])[0]) || '');
 function petStats(st){
-  const t = now(), c = x => Math.max(0, Math.min(100, Math.round(x)));
   if(!st) return {hunger:100, happy:100, clean:100, care:0};
-  return {hunger: c(100 - (t - Number(st.f||t))/FEED_MS*100),
-          happy:  c(100 - (t - Number(st.p||t))/PLAY_MS*100),
-          clean:  c(100 - (t - Number(st.w||t))/WASH_MS*100),
-          care:   Number(st.c||0)};
+  // Care is optional play; stats do not decay while the child is away.
+  return {hunger:100, happy:100, clean:100, care:Number(st.c||0)};
 }
 const petStage = care => care >= 70 ? 2 : care >= 25 ? 1 : 0;
 function petMood(S3){
@@ -2097,12 +2084,7 @@ function petMood(S3){
 }
 function petSay(S3, mood){
   if(mood === 'sleep') return 'หลับอยู่… เจอกันพรุ่งนี้เช้านะ 💤';
-  if(S3.hunger < 30) return 'ท้องร้องแล้ว หิวมาก ๆ 🍖';
-  if(S3.clean  < 30) return 'ตัวเลอะไปหมดเลย ขออาบน้ำหน่อย 🧼';
-  if(S3.happy  < 30) return 'เหงาจัง มาเล่นด้วยกันหน่อย 🎾';
-  if(S3.hunger < 60) return 'เริ่มหิวนิด ๆ แล้วนะ';
-  if(S3.happy  < 60) return 'อยากเล่นแล้ว!';
-  return 'สบายใจสุด ๆ ขอบคุณที่ดูแลนะ 💛';
+  return 'ดีใจที่ได้เจอกันนะ 💛';
 }
 /* บันทึกสถานะสัตว์ตัวที่กำลังเลี้ยง */
 async function petSave(kidId, patch, careAdd){
@@ -2119,24 +2101,26 @@ async function petSave(kidId, patch, careAdd){
     toast(`⚡ ${petBy(e).n} วิวัฒนาการเป็น "${STAGE[after].th}" แล้ว! 🎉`);
   }
 }
+const PET_CARE_COOLDOWN_MS = 5*60*1000;
 function petAct(what){
   const k = kidById(view.kidId); if(!k) return;
   const e = activePet(k);
-  if(!e){ toast('ยังไม่มีสัตว์เลี้ยงเลย — ทำงานให้ตรงเวลาเพื่อฟักไข่ก่อนนะ'); return; }
-  const S3 = petStats(petStOf(k) || (k.petst||{})[e]);
+  if(!e){ toast('ยังไม่มีสัตว์เลี้ยงเลย — ทำงานให้เสร็จเพื่อฟักไข่นะ'); return; }
+  const petState=(k.petst||{})[e]||{};
+  const S3 = petStats(petStOf(k) || petState);
   if(timeBand() === 'night' && what !== 'treat'){ toast('ตอนนี้หลับอยู่ ปลุกไม่ได้นะ 💤'); return; }
   if(what === 'feed'){
-    if(S3.hunger >= 75){ toast('อิ่มอยู่แล้ว ยังไม่หิวเลย'); return; }
+    if(now()-Number(petState.f||0)<PET_CARE_COOLDOWN_MS){toast('ให้อาหารกันอีกสักพักนะ 🍖');return;}
     sfx('coin'); boom(18,.6); petSave(k.id, {f:now()}, 1);
     toast('อร่อยจัง! 🍖'); return;
   }
   if(what === 'play'){
-    if(S3.happy >= 80){ toast('เพิ่งเล่นไป ยังสนุกอยู่เลย'); return; }
+    if(now()-Number(petState.p||0)<PET_CARE_COOLDOWN_MS){toast('เล่นกันอีกสักพักนะ 🎾');return;}
     sfx('done'); boom(22,.7); petSave(k.id, {p:now()}, 1);
     toast('สนุกมาก! 🎾'); return;
   }
   if(what === 'wash'){
-    if(S3.clean >= 80){ toast('ยังสะอาดอยู่เลย'); return; }
+    if(now()-Number(petState.w||0)<PET_CARE_COOLDOWN_MS){toast('อาบน้ำกันอีกสักพักนะ 🧼');return;}
     sfx('coin'); boom(18,.6); petSave(k.id, {w:now()}, 1);
     toast('ตัวหอมแล้ว! 🧼'); return;
   }
@@ -2178,7 +2162,7 @@ function petCard(k){
             : pct >= 75 ? 'ไข่สั่นแรงขึ้นเรื่อย ๆ!'
             : pct >= 40 ? 'ได้ยินเสียงข้างในแล้วนะ'
             : pct > 0   ? 'ไข่เริ่มอุ่นแล้ว'
-                        : 'ทำงานให้ตรงเวลา แล้วไข่จะค่อย ๆ อุ่นขึ้น';
+                        : 'ทำงานให้เสร็จ แล้วไข่จะค่อย ๆ อุ่นขึ้น';
   return `<div class="petcard">
     <div class="egg w${stage}">🥚</div>
     <div style="flex:1;min-width:0">
@@ -2199,7 +2183,7 @@ function petHome(k){
   if(!e) return `<div class="card" style="text-align:center;padding:26px">
     <div class="egg w1" style="font-size:56px">🥚</div>
     <b style="display:block;margin-top:10px">ยังไม่มีเพื่อนเลย</b>
-    <div class="muted" style="margin-top:6px">ทำงานให้ตรงเวลา ไข่จะค่อย ๆ อุ่นขึ้นแล้วฟักออกมาเอง</div></div>`;
+    <div class="muted" style="margin-top:6px">ทำงานให้เสร็จ ไข่จะค่อย ๆ อุ่นขึ้นแล้วฟักออกมาเอง</div></div>`;
   const P = petBy(e), R = RECIPE[e] || {h:'forest'};
   const st = (k.petst||{})[e], S3 = petStats(st), mood = petMood(S3), stg = petStage(S3.care);
   const night = timeBand() === 'night';
@@ -2229,9 +2213,9 @@ function petHome(k){
       <div class="muted" style="font-size:11px;margin-top:6px">ดูแลไปแล้ว ${S3.care} ครั้ง${
         stg<2?` · อีก ${(stg===0?25:70)-S3.care} ครั้งจะวิวัฒนาการ`:' · ร่างสมบูรณ์แล้ว'}</div>
       <div class="carerow">
-        ${btn('feed','🍖','ให้อาหาร', !night && S3.hunger < 75, 'ฟรี')}
-        ${btn('play','🎾','เล่นด้วย', !night && S3.happy  < 80, 'ฟรี')}
-        ${btn('wash','🧼','อาบน้ำ',  !night && S3.clean  < 80, 'ฟรี')}
+        ${btn('feed','🍖','ให้อาหาร', !night && now()-Number(st?.f||0)>=PET_CARE_COOLDOWN_MS, 'ฟรี')}
+        ${btn('play','🎾','เล่นด้วย', !night && now()-Number(st?.p||0)>=PET_CARE_COOLDOWN_MS, 'ฟรี')}
+        ${btn('wash','🧼','อาบน้ำ',  !night && now()-Number(st?.w||0)>=PET_CARE_COOLDOWN_MS, 'ฟรี')}
         ${btn('treat','🍰','ขนม', (!max || used < max) && available(k.id,'daily') >= cost,
               max ? `${cost} แต้ม · ${max-used}/${max}` : `${cost} แต้ม`)}
       </div>
@@ -2293,7 +2277,7 @@ function bankTab(k, myPend){
         : `ต้องคืนรวม ${o.total} (ดอก ${o.pctNow}%${over?` — เลยกำหนดแล้วดอกเดินวันละ ${cfg().loanLatePct}%`:''})`
         } · จ่ายไปแล้ว ${o.paid}</div>
       ${ln.cosignId ? `<div class="muted" style="margin-top:4px">🤝 ${esc(ln.cosignName||'')} ค้ำให้อยู่ ${
-        over ? '<b style="color:var(--warn)">— เลยกำหนดแล้ว แต้มค้ำกำลังโดนยึด</b>' : '— อย่าให้เลยกำหนดนะ'}</div>` : ''}
+        over ? '— มีการค้ำประกันตามสัญญาเดิม' : '— สัญญาค้ำประกันเดิม'}</div>` : ''}
       <div class="muted" style="margin-top:4px">🤖 แต้มที่ได้ทุกครั้ง จะถูกหักใช้หนี้อัตโนมัติ ${
         cfg().loanRepayPct}%</div>
       <button class="btn-primary btn-full" style="margin-top:10px" onclick="payLoanAll()">
@@ -2320,51 +2304,17 @@ function bankTab(k, myPend){
     <div class="card" style="border:2px solid var(--warn)55">
       <div class="row-between"><b>🔒 แต้มค้ำประกัน</b><span class="tag tag-wait">${b.amount}</span></div>
       <div class="muted" style="margin-top:6px">ล็อกไว้ค้ำหนี้ให้${esc(b.forName||'พี่น้อง')}
-        · ใช้ไม่ได้จนกว่าหนี้จะปิด · ถ้าเขาคืนไม่ทันกำหนด แต้มนี้จะโดนยึดไปใช้หนี้</div></div>`).join('');
-
-  out += `<div class="sec-title">💰 ฝากแต้มกินดอก</div>`;
-  ['daily'].forEach(pot => {
-    let tl = depTiers(pot);
-    if(!tl.length) return;
-    const okTiers = ln ? tl.filter(t => now() + t.days*DAYMS <= graceEndOf(ln)) : tl;
-    const has = depositIn(k.id), have = available(k.id);
-    const can = !has && have > 0 && okTiers.length > 0;
-    out += `<div class="item"><div class="emo">⭐</div>
-      <div class="txt"><b>${POT_NAME[pot]}</b><span class="muted">${
-        tl.map(t => `${t.days} วัน +${t.pct}%`).join(' · ')}${depCap(pot)?` · ฝากได้ไม่เกิน ${depCap(pot)}`:''}</span></div>
-      <button class="${can ? 'btn-primary':''} btn-sm" ${can ? '' : 'disabled'}
-        onclick="openDeposit('${pot}')">${
-        has ? 'ฝากอยู่แล้ว' : have<=0 ? 'ไม่มีแต้ม' : okTiers.length ? 'ฝาก' : 'ฝากไม่ได้'}</button></div>`;
-  });
-  if(ln) out += `<div class="muted" style="margin:6px 2px">ตอนมีหนี้ ฝากได้เฉพาะบัญชีที่ครบกำหนด
-    <b>ก่อนหมดช่วงปลอดดอก</b> ของหนี้ก้อนนี้ (${untilTxt(loanOwed(ln).graceEnd)})</div>`;
-
-  if(!ln && !waitLoan.length){
-    const perWk = Number(cfg().loanPerWeek||0), used = loansThisWeek(k.id);
-    const outOf = perWk && used >= perWk;
-    const blocked = deps.length > 0 || outOf;
-    out += `<div class="sec-title">💳 ยืมแต้มล่วงหน้า</div>
-      <div class="card">
-        <div class="muted">ยืมได้ไม่เกิน <b>${cfg().loanCap}</b> แต้ม
-          · ดอก ${cfg().loanPct}% คืนภายใน ${cfg().loanDays} วัน
-          · เลยกำหนดดอกเดินวันละ ${cfg().loanLatePct}% (สูงสุด ${cfg().loanMaxPct}%)${
-          perWk ? ` · ยืมได้สัปดาห์ละ ${perWk} ครั้ง (สัปดาห์นี้ใช้ไป ${used})` : ''}</div>
-        <button class="${blocked?'':'btn-primary'} btn-full" style="margin-top:10px"
-          ${blocked?'disabled':''} onclick="openLoan()">${
-          outOf ? 'สัปดาห์นี้ยืมครบแล้ว'
-          : deps.length ? 'ถอนเงินฝากให้หมดก่อนถึงจะยืมได้' : 'ขอยืมแต้ม'}</button></div>`;
-  }
+        · ใช้ไม่ได้จนกว่าหนี้เดิมจะปิด</div></div>`).join('');
 
   out += `<div class="card" style="background:var(--navy-soft);margin-top:14px">
     <div class="sec-title" style="margin:0 0 6px">📘 กติกาธนาคาร</div>
-    <div class="muted">ฝาก 7 วัน +1% หรือ 30 วัน +5% · ถอนก่อนกำหนดไม่ได้ดอก<br>
-      ยืมไม่เกิน 300 แต้ม · ดอก 10% · คืนภายใน 14 วัน · แต้มจากงานหักคืน 50% อัตโนมัติ<br>
-      เงินฝากและหนี้ที่เปิดก่อนปรับกติกาใช้อัตราเดิมจนจบสัญญา</div></div>`;
+    <div class="muted">บัญชีฝากและหนี้เดิมยังแสดงยอดและเงื่อนไขตามสัญญาไว้จนกว่าจะปิดบัญชี</div></div>`;
   return out;
 }
 
 /* ---------- 🏦 ธนาคาร: ฝากแต้ม ---------- */
 function openDeposit(pot){
+  toast('หยุดเปิดบัญชีใหม่ไว้ก่อน — บัญชีเดิมยังจัดการได้'); return;
   const kid = kidById(view.kidId); if(!kid || !bankOn()) return;
   if(depositIn(kid.id)){ toast('ตอนนี้มีบัญชีฝากแต้มอยู่แล้ว 1 บัญชี'); return; }
   const ln = activeLoan(kid.id);
@@ -2397,6 +2347,7 @@ function openDeposit(pot){
     }});
 }
 function doDeposit(kid, pot, n, t){
+  toast('หยุดเปิดบัญชีใหม่ไว้ก่อน'); return;
   const iv = Math.floor(n * t.pct / 100);
   askKidPin(kid, () => openConfirm('ฝากแต้ม',
     `ฝาก ${n} แต้ม ล็อก ${t.days} วัน — ครบกำหนดได้คืน ${n + iv} แต้ม (ดอก +${iv}) · ถอนก่อนกำหนดจะไม่ได้ดอกเลยนะ`,
@@ -2456,6 +2407,7 @@ function askEarly(recId){
 }
 /* ---------- 🏦 ธนาคาร: ยืมแต้ม (เฉพาะ 🎈 แต้ม) ---------- */
 function openLoan(){
+  toast('หยุดคำขอยืมใหม่ไว้ก่อน — บัญชีเดิมยังคืนได้ตามปกติ'); return;
   const kid = kidById(view.kidId); if(!kid || !bankOn()) return;
   if(activeLoan(kid.id)){ toast('ยังมีหนี้ค้างอยู่ ต้องปิดหนี้ก่อนถึงจะยืมใหม่ได้'); return; }
   if(myDeposits(kid.id).length){ toast('มีเงินฝากล็อกอยู่ — ถอนก่อนถึงจะยืมได้ (กันฝากกินดอกแล้วยืมมาใช้)'); return; }
@@ -2483,6 +2435,7 @@ function pickCosign(kid, n, pct, dys){
   modal = {kind:'cosign', kid, n, pct, dys, need, able}; renderModal();
 }
 function cosignWith(partnerId, alone){
+  toast('หยุดการค้ำประกันใหม่ไว้ก่อน'); return;
   const m = modal; if(!m) return;
   modal = null; renderModal();
   if(alone){ doLoan(m.kid, m.n, m.pct, m.dys, null); return; }
@@ -2494,6 +2447,7 @@ function cosignWith(partnerId, alone){
     `${partner.name} ใส่ PIN เพื่อยอมให้ล็อกแต้ม ${m.need} แต้มไว้ค้ำ — ถ้า${m.kid.name}คืนไม่ทัน แต้มนี้จะโดนยึด`);
 }
 function doLoan(kid, n, pct, dys, cs){
+  toast('หยุดคำขอยืมใหม่ไว้ก่อน'); return;
   const total = n + Math.ceil(n * pct / 100);
   const rp = Number(cfg().loanRepayPct||50), gr = Number(cfg().loanGraceDays||0);
   askKidPin(kid, () => openConfirm('ขอยืมแต้ม',
@@ -2631,11 +2585,11 @@ function parentSummary(){
         <div class="muted">ตรงเวลา ${s.ontime}/${s.applicable} วัน · ทำจริงเฉลี่ย ${avg}${avgLate>0?` (สายเฉลี่ย ${avgLate} นาที)`:''}</div>
         <div class="dayrow">${boxes}</div></div>`;
     }).join('');
-    const st = onTimeStreak(k.id), pr = routineProgress(k.id);
+    const pr = routineProgress(k.id);
     return `<div class="card">
       <div class="row" style="margin-bottom:14px">${avatar(k,46)}
         <div style="flex:1"><b>${esc(k.name)}</b>
-          <div class="muted">วันนี้ ${pr.done}/${pr.total} · ${st>0?`🔥 ตรงเวลาครบ ${st} วันติด`:'ยังไม่มีวันที่ตรงเวลาครบ'}</div></div></div>
+          <div class="muted">วันนี้ทำแล้ว ${pr.done}/${pr.total} งาน</div></div></div>
       ${rows}
       <div class="muted" style="border-top:1px solid var(--line);padding-top:10px">
         เขียว = ตรงเวลา · เหลือง = สายนิดหน่อย · แดง = สายเกินไป · ชมพู = ไม่ได้ทำ · เทา = ไม่มีในวันนั้น</div></div>`;
@@ -2645,7 +2599,7 @@ function parentSummary(){
 /* ---------- หน้าผู้ปกครอง ---------- */
 function viewParent(){
   const n = S.pending.length;
-  const tabs = [['review','ตรวจ'+(n?' ('+n+')':'')],['summary','สรุปเวลา'],['points','ให้/หักแต้ม'],['manage','ตั้งค่า'],['log','ประวัติ']];
+  const tabs = [['review','ตรวจ'+(n?' ('+n+')':'')],['summary','สรุปเวลา'],['points','ให้แต้ม'],['manage','ตั้งค่า'],['log','ประวัติ']];
   const tabBtns = tabs.map(([id,l]) => `<button class="${view.tab===id?'on':''}" onclick="setTab('${id}')">${l}</button>`).join('');
   const body = view.tab==='review' ? parentReview()
              : view.tab==='summary' ? parentSummary()
@@ -2663,7 +2617,9 @@ function parentReview(){
   return S.pending.map(p => {
     const k = kidById(p.kidId) || {name:'?', emo:'❓', color:'#999', photo:''};
     const kind = p.type;
-    const timeInfo = kind==='chore'
+    const timeInfo = kind==='help'
+      ? `🙋 ขอความช่วยเหลือเรื่องนี้ · ขอเมื่อ ${timeAgo(p.ts)}`
+      : kind==='chore'
       ? `กดตอน <b class="clock">${fmtClock(p.ts)}</b>` + (p.due
           ? ` · กำหนด ${p.due} · <span style="color:${STATUS_COL[p.status]||'var(--muted)'}">${p.status?STATUS_TXT[p.status]:''}${p.lateMin?` ${p.lateMin} นาที`:''}</span>` : '')
       : kind==='transfer'
@@ -2681,9 +2637,9 @@ function parentReview(){
       : p.partnerId
         ? `🤝 หารกับ ${esc(p.partnerName || (kidById(p.partnerId)||{}).name || '')} — ราคาเต็ม ${p.total} แต้ม คนขอจ่าย <b>${p.pts}</b> อีกคนจ่าย <b>${p.partnerPts ?? p.pts}</b> · ขอเมื่อ ${timeAgo(p.ts)}`
         : `ขอเมื่อ ${timeAgo(p.ts)}`;
-    const tagTxt = (kind==='chore' || kind==='loan' || kind==='unlock') ? '+'+p.pts
+    const tagTxt = kind==='help' ? 'ขอช่วย' : (kind==='chore' || kind==='loan' || kind==='unlock') ? '+'+p.pts
                  : kind==='transfer' ? '→ '+p.pts : '−'+p.pts;
-    const tagCls = kind==='chore' ? (p.pts>0?'tag-plus':'tag-minus')
+    const tagCls = kind==='help' ? 'tag-wait' : kind==='chore' ? (p.pts>0?'tag-plus':'tag-minus')
                  : (kind==='transfer' || kind==='loan' || kind==='unlock') ? 'tag-wait' : 'tag-cost';
     return `<div class="card">
       <div class="row" style="margin-bottom:8px">${avatar(k, 44)}
@@ -2692,11 +2648,9 @@ function parentReview(){
         <span class="tag ${tagCls}">${tagTxt}</span></div>
       <div class="muted" style="margin-bottom:10px">${timeInfo}</div>
       <div class="row">
-        <button class="btn-good btn-sm" style="flex:1" onclick="approve('${p.id}')">
-          ${kind==='chore' ? `✓ ผ่าน (${p.pts} แต้ม)` : '✓ อนุมัติ'}</button>
-        ${kind==='chore' && p.full && Number(p.pts) < Number(p.full)
-          ? `<button class="btn-sm" style="flex:1" onclick="approve('${p.id}',${p.full})">ให้เต็ม (${p.full})</button>` : ''}
-        <button class="btn-warn btn-sm" style="flex:1" onclick="reject('${p.id}')">✕ ไม่ผ่าน</button>
+        ${kind==='help' ? `<button class="btn-good btn-sm" style="flex:1" onclick="dismissHelp('${p.id}')">✓ รับทราบ</button>` : `<button class="btn-good btn-sm" style="flex:1" onclick="approve('${p.id}')">
+          ${kind==='chore' ? `✓ ผ่าน (${p.full ?? p.pts} แต้ม)` : '✓ อนุมัติ'}</button>`}
+        ${kind==='help' ? '' : `<button class="btn-warn btn-sm" style="flex:1" onclick="reject('${p.id}')">✕ ไม่ผ่าน</button>`}
       </div></div>`;
   }).join('');
 }
@@ -2825,13 +2779,13 @@ async function approve(pid, override){
       };
       let earned=null, postLoan=null;
       if(p.type==='chore'){
-        const pts=override===undefined||override===null?Number(p.pts):Number(override);
+        const pts=override===undefined||override===null?Number(p.full ?? p.pts):Number(override);
         if(!Number.isSafeInteger(pts)||pts<0||pts>Math.max(Number(p.full||0),Number(p.pts||0)))
           approvalError('แต้มงานไม่ถูกต้อง');
         const entry=logEntry(p.kidId,'chore',p.name,p.emo,pts,
           {pot:p.pot||'daily',due:p.due||'',status:p.status||'',lateMin:p.lateMin||0});
         entry.ts=p.ts; put(p.kidId,entry);
-        const warm=pts>0&&p.status==='ontime'?WARM_ONTIME:0;
+        const warm=pts>0?WARM_ONTIME:0;
         const k=kids[p.kidId], beforeXp=Number(k.xp||0), beforeWarm=Number(k.eggWarm||0);
         const u={points:increment(pts)};
         if(pts>0) u.xp=increment(pts);
@@ -2940,6 +2894,10 @@ async function approve(pid, override){
     }catch(e){ console.error('Approval saved; follow-up effect failed',e); }
   }catch(e){ if(e?.userMessage) toast(e.message); else fail(e); }
 }
+async function dismissHelp(pid){
+  const p=S.pending.find(x=>x.id===pid); if(!p||p.type!=='help') return;
+  try{ await deleteDoc(dref('pending',pid)); toast('รับทราบคำขอแล้ว'); }catch(e){ fail(e); }
+}
 function reject(pid){
   const p=S.pending.find(x=>x.id===pid); if(!p) return;
   openConfirm('ไม่ผ่าน',`"${p.name}" จะถูกตีกลับ ไม่ได้/ไม่เสียแต้ม`,async()=>{
@@ -2968,15 +2926,7 @@ function parentPoints(){
         <button class="btn-good btn-sm" ${left.length?'':'disabled'}
           onclick="giveAll('${c.id}')">${left.length?'ให้ทุกคน':'✓'}</button></div>`;
     }).join('')}</div>` : '';
-  const allPens = S.penalties.filter(p => p.all);
-  const penBox = (allPens.length && S.kids.length > 1) ? `<div class="card" style="background:var(--warn-soft)">
-    <div class="sec-title" style="margin:0 0 4px">⚡ หักแต้มทั้งบ้านพร้อมกัน</div>
-    <div class="muted" style="margin-bottom:10px">เรื่องที่ผิดทั้งคู่ กดครั้งเดียวหักทุกคน — ไม่ต้องเสียเวลาหาว่าใครเริ่มก่อน</div>
-    <div class="row" style="flex-wrap:wrap;gap:6px">
-      ${allPens.map(p => `<button class="btn-warn btn-sm" style="background:#fff"
-        onclick="applyPenaltyAll('${p.id}')">${p.emo} ${esc(p.name)} −${p.pts} ทุกคน</button>`).join('')}
-    </div></div>` : '';
-  return allBox + penBox + S.kids.map(k => {
+  return allBox + S.kids.map(k => {
     const pr = routineProgress(k.id);
     const sc = todayScore(k.id);
     const parentChores = S.chores.filter(c => c.by==='parent' && !c.all && appliesOn(c) && !doneToday(k.id, c.name));
@@ -2986,28 +2936,19 @@ function parentPoints(){
           <div><b>${esc(k.name)}</b><div class="muted">⭐ ${available(k.id)} แต้ม${
             pr.total?` · วันนี้ ${sc.core}/${sc.max} (${sc.pct}%)`:''}</div></div></div>
         <div class="row">
-          <button class="btn-good btn-sm" onclick="openAdjust('${k.id}',1)">+ ให้</button>
-          <button class="btn-warn btn-sm" onclick="openAdjust('${k.id}',-1)">− หัก</button></div></div>
+          <button class="btn-good btn-sm" onclick="openAdjust('${k.id}',1)">+ ให้</button></div></div>
       ${parentChores.length ? `<div class="sec-title" style="margin:0 0 4px">🏫 รายการที่คุณเป็นคนกดให้</div>
         <div class="muted" style="margin-bottom:10px">กดตาม<b>สิ่งที่เกิดขึ้นจริง</b> — ระบบไม่ดูว่าคุณมากดตอนกี่โมง
           (ไปส่งตอน 7:55 แล้วมากดตอน 9:30 ก็กด "ตรงเวลา" ได้)</div>
         ${parentChores.map(c => {
-          const half = Math.max(0, Math.round(Number(c.pts)*Number(c.latePct||50)/100));
           return `<div class="item" style="box-shadow:none;background:var(--bg);flex-wrap:wrap">
           <div class="emo">${c.emo}</div>
           <div class="txt"><b>${esc(c.name)}</b><span class="muted">กำหนด ${c.due||'—'}</span></div>
           <div class="row" style="gap:6px;width:100%;margin-top:8px">
             <button class="btn-good btn-sm" style="flex:1" onclick="markParent('${k.id}','${c.id}','ontime')">✓ ตรงเวลา +${c.pts}</button>
-            <button class="btn-sm" style="flex:1;background:var(--gold-soft);color:var(--gold)"
-              onclick="markParent('${k.id}','${c.id}','late')">⚠️ สาย +${half}</button>
-            <button class="btn-warn btn-sm" style="flex:1" onclick="markParent('${k.id}','${c.id}','miss')">✕ สายมาก 0</button>
+            <button class="btn-sm" style="flex:1" onclick="markParent('${k.id}','${c.id}','late')">ทำเสร็จแล้ว +${c.pts}</button>
           </div></div>`;
         }).join('')}` : ''}
-      <div class="sec-title" style="margin:14px 0 8px">หักแต้มด่วน</div>
-      <div class="row" style="flex-wrap:wrap;gap:6px">
-        ${S.penalties.map(p => `<button class="btn-warn btn-sm"
-          onclick="applyPenalty('${k.id}','${p.id}')">${p.emo} ${esc(p.name)} −${p.pts}${p.all?' (เฉพาะคนนี้)':''}</button>`).join('')
-          || '<span class="muted">ยังไม่มีรายการหักแต้ม</span>'}</div>
       <div class="sec-title" style="margin:14px 0 8px">ให้แต้มด่วน (กดแทนลูกได้)</div>
       <div class="row" style="flex-wrap:wrap;gap:6px">
         ${S.chores.filter(c=>c.by!=='parent').map(c => `<button class="btn-sm" style="background:var(--good-soft);color:var(--good)"
@@ -3045,8 +2986,7 @@ async function markParent(kidId, cid, mode){
   if(mode === true) mode = 'ontime';
   if(mode === false) mode = 'late';
   const full = Number(c.pts);
-  const pts = mode === 'ontime' ? full
-            : mode === 'late'   ? Math.max(0, Math.round(full*Number(c.latePct||50)/100)) : 0;
+  const pts = full;
   const status = mode === 'ontime' ? 'ontime' : mode === 'late' ? 'late' : 'toolate';
   try{
     await addLog(logEntry(kidId,'chore',c.name,c.emo,pts,
@@ -3076,7 +3016,8 @@ function applyPenalty(kidId, pid){
   });
 }
 function openAdjust(kidId, dir){
-  openForm({title: dir>0?'ให้แต้มเพิ่มเอง':'หักแต้มเอง',
+  if(dir<0) return;
+  openForm({title:'ให้แต้มเพิ่มเอง',
     fields:[{key:'pts', label:'กี่แต้ม', type:'number', value:10},
             {key:'why', label:'เหตุผล', type:'text', value: dir>0?'ทำดีพิเศษ':'ปรับพฤติกรรม'}],
     async onSave(v){
@@ -3165,14 +3106,6 @@ function parentManage(){
       <div class="muted" style="margin-top:8px">${c.idleHome
         ? 'กันเครื่องค้างอยู่ในบัญชีของคนก่อนหน้า (โหมดผู้ปกครองให้เวลานานกว่า 3 เท่า)'
         : 'เครื่องจะค้างอยู่หน้าเดิมจนกว่าจะมีคนกดออก'}</div>
-      <div class="row-between" style="margin-top:16px">
-        <span>⏳ แท่งเวลา เข้าโหมดด่วนเมื่อเหลือ</span>
-        <button class="btn-sm" onclick="editUrgentMin()">${c.urgentMin===undefined?15:c.urgentMin} นาที</button></div>
-      <div class="muted" style="margin-top:8px">ทุกงานที่มีเส้นตายจะมีแท่งเวลาหดลงให้เห็น
-        · เหลือน้อยกว่านี้เปลี่ยนเป็นสีเหลืองเต้น ๆ · เหลือ 5 นาทีหรือเลยเวลาแล้วเป็นสีแดง (ใส่ 0 = ปิดโหมดด่วน)</div>
-      <div class="row-between" style="margin-top:16px">
-        <span>โบนัสตรงเวลาครบทั้งวัน</span>
-        <button class="btn-sm" onclick="editBonus()">${c.perfectBonus ? '+'+c.perfectBonus+' แต้ม' : 'ปิดอยู่'}</button></div>
       <div class="row-between" style="margin-top:12px">
         <span>🤝 แบ่งแต้มให้พี่น้องได้วันละ</span>
         <button class="btn-sm" onclick="editGiveCap()">${
@@ -3185,7 +3118,7 @@ function parentManage(){
         <button class="${c.soundOn!==false?'':'on'}" onclick="setOpt('soundOn',false)">🔇 ปิดเสียง</button></div>
       <div class="muted" style="margin-top:8px">
         กดงานเสร็จ → กระดาษโปรย + เสียงสั้น ๆ · <b>เลเวลกับฉายา</b> โตจากแต้มที่หาได้ตลอดกาล (ใช้แต้มไปแล้วเลเวลไม่ลด)
-        · <b>ไข่</b> อุ่นขึ้นจาก "ตรงเวลา" เท่านั้น (ตรงเวลา +${WARM_ONTIME} · ครบทั้งวัน +${WARM_PERFECT})
+        · <b>ไข่</b> อุ่นขึ้นทุกครั้งที่ทำงานเสร็จ (+${WARM_ONTIME})
         ซื้อด้วยแต้มไม่ได้ ยืมไม่ได้ แลกไม่ได้ — ฟองแรกใช้ ${eggNeed({})} หน่วย (~3 วัน) ฟองถัด ๆ ไปเพิ่มทีละ 60</div>
       <div class="row-between" style="margin-top:12px">
         <span>🍰 ขนมสัตว์เลี้ยง (ราคา / ต่อวัน)</span>
@@ -3193,7 +3126,7 @@ function parentManage(){
           c.treatCost===undefined?3:c.treatCost} แต้ม</button>
         <button class="btn-sm" onclick="editBankNum('treatMax','ให้ขนมได้วันละกี่ครั้ง (0 = ไม่จำกัด)',0,10)">${
           c.treatMax===undefined?2:c.treatMax} ครั้ง</button></div>
-      <div class="muted" style="margin-top:8px">อาหาร/เล่น/อาบน้ำ <b>ฟรีเสมอ</b> — สัตว์จะไม่มีวันตาย แค่หิวหรือง่วง
+      <div class="muted" style="margin-top:8px">อาหาร/เล่น/อาบน้ำ <b>ฟรีเสมอ</b> — สัตว์ไม่ป่วยหรือเสียใจเมื่อไม่ได้เข้าแอป
         · ขนมเป็นทางเลือกที่ใช้แต้ม ช่วยดูดแต้มส่วนเกินออกจากระบบ (ค่าเริ่ม 3 แต้ม × 2 ครั้ง = 6 แต้ม/วัน)</div>
       <div class="row-between" style="margin-top:12px">
         <span>🐾 รูปสัตว์เลี้ยง</span>
@@ -3221,10 +3154,6 @@ function parentManage(){
     <div class="sec-title">⭐ งานเสริม → กระเป๋าแต้มเดียวกัน (ไม่นับใน % กิจวัตร)</div>
     ${S.chores.filter(x=>!x.routine).map(choreRowM).join('') || '<div class="empty">ยังไม่มี</div>'}
     <button class="btn-primary btn-full" onclick="editItem('chores')">+ เพิ่มงาน</button>
-
-    <div class="sec-title">⚠️ รายการหักแต้ม</div>
-    ${S.penalties.map(p => simpleRow('penalties', p, 'tag-minus', '−'+p.pts+(p.all?' 👥':''))).join('')}
-    <button class="btn-primary btn-full" onclick="editItem('penalties')">+ เพิ่มรายการหักแต้ม</button>
 
     <div class="sec-title">🎁 รางวัลทั่วไป — ใช้แต้ม (🤝 = หารกันได้)</div>
     ${S.rewards.filter(r=>!r.big).map(r => simpleRow('rewards', r, 'tag-cost',
@@ -3287,10 +3216,7 @@ function bankPanel(c){
   }).join('');
   return `<div class="card">
     <div class="sec-title">🏦 กติกาธนาคาร</div>
-    <div class="muted">ฝากแต้ม 7 วัน ดอก 1% หรือ 30 วัน ดอก 5% · ถอนก่อนกำหนดไม่ได้ดอก
-      · ยืมได้ไม่เกิน 300 แต้ม ดอก 10% คืนภายใน 14 วัน
-      · แต้มจากงานใหม่หักคืนอัตโนมัติ 50%<br>
-      บัญชีเก่าที่เปิดไว้ยังใช้อัตราและวันครบตามสัญญาเดิม</div>
+    <div class="muted">บัญชีฝากและหนี้เดิมยังแสดงยอดและเงื่อนไขตามสัญญาไว้จนกว่าจะปิดบัญชี</div>
     ${openAcc||'<div class="muted" style="margin-top:10px">ยังไม่มีบัญชีเปิดอยู่</div>'}
   </div>`;
 }
@@ -3759,7 +3685,7 @@ function editItem(list, id){
       fields:[
         {key:'name', label:'ชื่องาน', type:'text', value:x?x.name:''},
         {key:'emo', label:'ไอคอน', type:'emoji', value:x?x.emo:'✨'},
-        {key:'pts', label:'ได้กี่แต้ม (ถ้าทันเวลา)', type:'number', value:x?x.pts:10},
+        {key:'pts', label:'ได้กี่แต้มเมื่องานเสร็จ', type:'number', value:x?x.pts:10},
         {key:'from', label:'เริ่มกดได้ตอน (เว้นว่าง = กดได้ตลอด)', type:'time', value:x?(x.from||''):''},
         {key:'due', label:'ต้องเสร็จก่อนเวลา (เว้นว่าง = ไม่กำหนด)', type:'time', value:x?(x.due||''):''},
         {key:'days', label:'ทำวันไหนบ้าง', type:'days', value:x?(x.days||ALLDAYS).slice():WEEKDAYS.slice()},
@@ -3771,8 +3697,6 @@ function editItem(list, id){
          onText:'ให้ทั้งบ้าน', offText:'ให้ทีละคน'},
         {key:'chain', label:'ต้องทำตามลำดับไหม', type:'switch', value:x?(x.chain!==false):true,
          onText:'ต้องทำตามคิว', offText:'ทำก่อน–หลังได้อิสระ'},
-        {key:'grace', label:'สายได้ไม่เกินกี่นาที (ยังได้แต้มบางส่วน)', type:'number', value:x?(x.grace||10):10},
-        {key:'latePct', label:'สายแล้วได้กี่ % ของแต้มเต็ม', type:'number', value:x?(x.latePct||50):50},
         {key:'once', label:'ทำได้บ่อยแค่ไหน', type:'switch', value:x?!!x.once:true,
          onText:'วันละ 1 ครั้ง', offText:'หลายครั้งได้'},
         {key:'carryDay', label:'ถ้าไม่ได้ทำ ยกไปทำวันไหนได้ (เลือกวันที่ไม่ได้ติ๊กไว้ข้างบน)', type:'pick',
@@ -3788,13 +3712,12 @@ function editItem(list, id){
         const okTime = s => !s || /^\d{1,2}:\d{2}$/.test(s);
         if(!okTime(due) || !okTime(from)) return 'เวลาต้องเป็นรูปแบบ ชม:นาที เช่น 07:00';
         if(from && due && from.padStart(5,'0') >= due.padStart(5,'0')) return 'เวลาเริ่มต้องมาก่อนเวลากำหนดส่ง';
-        const g = parseInt(v.grace,10), lp = parseInt(v.latePct,10);
         const base = {name:v.name.trim(), emo:v.emo||'✨', pts:n,
           from: from ? from.padStart(5,'0') : '', due: due ? due.padStart(5,'0') : '',
           days: Array.isArray(v.days)&&v.days.length ? v.days : ALLDAYS.slice(),
           routine: !!v.routine, by: (v.all || !v.by) ? 'parent' : 'kid',
           extra: !v.routine, all: !!v.all, chain: !!v.chain,
-          grace: isNaN(g)||g<0 ? 10 : g, latePct: isNaN(lp)||lp<0||lp>100 ? 50 : lp,
+          grace: x ? Number(x.grace??15) : 15, latePct: x ? Number(x.latePct??100) : 100,
           carryDay: (v.carryDay===''||v.carryDay===undefined||v.carryDay===null) ? '' : parseInt(v.carryDay,10),
           carryPct: Math.min(100, Math.max(1, parseInt(v.carryPct,10)||100))};
         // วันที่ยกไปทำ ต้องไม่ใช่วันที่ทำงานนี้อยู่แล้ว ไม่งั้นจะได้แต้ม 2 เด้ง
@@ -4409,12 +4332,12 @@ onAuthStateChanged(auth, async user => {
 /* ---------- ให้ปุ่มใน HTML เรียกใช้ได้ ---------- */
 Object.assign(window, {
   startAdventure, setAdventureLevel,
-  askPin, pinTap, pinDel, go, setTab, doChore, redeem, shareWith, shareCustom, shareAlone, giveAll,
+  askPin, pinTap, pinDel, go, setTab, doChore, requestHelp, dismissHelp, redeem, shareWith, shareCustom, shareAlone, giveAll,
   approve, reject, markParent, giveChore, applyPenalty, applyPenaltyAll, openAdjust, undoLog,
   openGive, giveForm, joinShare, petAct, petChoose, openPetArt, petArtTier, pickPetArt, pickPetArt3, clearPetArt,
   openDeposit, withdrawDep, askEarly, openLoan, payLoanAll, editBankNum, editBankTier,
   cosignWith, seizeCollateral,
-  editKid, editItem, delItem, setOpt, editBonus, editGiveCap, editUrgentMin, editAutoSec, editIdleSec,
+  editKid, editItem, delItem, setOpt, editGiveCap, editAutoSec, editIdleSec,
   changeParentPin, doSignOut,
   stayHere, goHomeNow,
   openForm, openConfirm, confirmYes, closeModal, setVal, toggleDay, setDays,
